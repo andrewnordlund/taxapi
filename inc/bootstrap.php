@@ -8,7 +8,7 @@ define("PROJECT_ROOT_PATH", dirname(__DIR__ . "../"));
 
 // include the base controller file
 
-require_once PROJECT_ROOT_PATH . "/Controller/Api/BaseController.php";
+require_once PROJECT_ROOT_PATH . "/Controller/API/BaseController.php";
 
 // include the use model file
 

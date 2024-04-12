@@ -78,7 +78,7 @@ if (isset($uri[3])) {
 	//}
 	$outData = $taxInfo;
 }
-require PROJECT_ROOT_PATH . "/Controller/Api/UserController.php";
+require PROJECT_ROOT_PATH . "/Controller/API/UserController.php";
 
 $objFeedController = new UserController($outData);
 //$strMethodName = $action . 'Action';
