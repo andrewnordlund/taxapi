@@ -2,6 +2,8 @@
 // All this from https://code.tutsplus.com/how-to-build-a-simple-rest-api-in-php--cms-37000t
 require "inc/bootstrap.php";
 
+$version = "0.1.1";
+
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
 $uri = explode( '/', $uri );
@@ -13,7 +15,7 @@ $uri = explode( '/', $uri );
 
  */
 $action = "showAll";
-$outData = array(); //$taxInfo;
+$outData = array("version"=>$version); //$taxInfo;
 if (isset($uri[3])) {
 	$amt = null;
 	$year = date("Y");
