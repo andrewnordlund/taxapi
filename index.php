@@ -85,7 +85,7 @@ $objFeedController = new UserController($outData);
 //$objFeedController->{$strMethodName}();
 //$objFeedController->sendResp();
 header("Content-Type: application/json; charset=UTF-8");
-print json_encode($outData);
+//print json_encode($outData);
 
 function calculate($amt, $prov) {
 	global $outData;
