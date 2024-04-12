@@ -83,7 +83,9 @@ require PROJECT_ROOT_PATH . "/Controller/API/UserController.php";
 $objFeedController = new UserController($outData);
 //$strMethodName = $action . 'Action';
 //$objFeedController->{$strMethodName}();
-$objFeedController->sendResp();
+//$objFeedController->sendResp();
+header("Content-Type: application/json; charset=UTF-8");
+print json_encode($outData);
 
 function calculate($amt, $prov) {
 	global $outData;

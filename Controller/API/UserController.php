@@ -67,8 +67,8 @@ class UserController extends BaseController {
 			);
 		} else {
 			$this->sendOutput(
-				array('Content-Type: application/json', 'HTTP/1.1 200 OK')
 				json_encode($this->outData),
+				array('Content-Type: application/json', 'HTTP/1.1 200 OK')
 			);
 		}
 	} // End of sendResp
