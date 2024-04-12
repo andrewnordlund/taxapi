@@ -2,7 +2,7 @@
 // All this from https://code.tutsplus.com/how-to-build-a-simple-rest-api-in-php--cms-37000t
 require "inc/bootstrap.php";
 
-$version = "0.1.1";
+$version = "0.1.2";
 
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
@@ -116,6 +116,9 @@ function calculate($amt, $prov) {
 	$outData["canada"]["marginalRate"] = round($mtr, 5);
 	$outData["canada"]["averageRate"] = round($taxPaid/$amt, 5);
 
+	$bpar = min($outData["canada"]["bpa"]*$outData["canada"]["bracket"][0]["rate"], $taxPaid);
+	$outData["canada"]["bpaRefund"] = $bpar;
+
 	// Provincial
 	$pbracket = 0;
 	$ptaxPaid = 0;
@@ -138,6 +141,10 @@ function calculate($amt, $prov) {
 		$outData[$prov]["taxPaid"] = round($ptaxPaid, 4);
 		$outData[$prov]["marginalRate"] = round($pmtr, 5);
 		$outData[$prov]["averateRate"] = round($ptaxPaid / $amt, 5);
+
+		$pbpar = min($outData[$prov]["bpa"]*$outData[$prov]["bracket"][0]["rate"], $ptaxPaid);
+		$outData[$prov]["bpaRefund"] = $pbpar;
+
 	}
 
 	$ttaxPaid = $ptaxPaid + $taxPaid;
@@ -147,7 +154,8 @@ function calculate($amt, $prov) {
 	$outData["results"]["taxPaid"] = round($ttaxPaid, 4);
 	$outData["results"]["marginalRate"] = round($mtr + $pmtr, 5);
 	$outData["results"]["averageRate"] = round($ttaxPaid / $amt, 5);
-	
+	$outData["results"]["bpaRefund"] = $bpar + $pbpar;
+	$outData["results"]["netWithBPARefund"] = round($amt - $ttaxPaid + $bpar + $pbpar);
 } // End of calculate
 
 
