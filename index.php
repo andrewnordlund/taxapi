@@ -2,7 +2,7 @@
 // All this from https://code.tutsplus.com/how-to-build-a-simple-rest-api-in-php--cms-37000t
 require "inc/bootstrap.php";
 
-$version = "0.1.2";
+$version = "0.1.3-a1";
 
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
@@ -62,8 +62,8 @@ if (isset($uri[3])) {
 	$outData["canada"]["year"] = $year;
 	
 	$res = null;
-
-
+	combineBrackets($prov);
+	calcTops ($prov);
 	if ($amt) {
 		calculate($amt, $prov);
 	}
@@ -155,9 +155,163 @@ function calculate($amt, $prov) {
 	$outData["results"]["marginalRate"] = round($mtr + $pmtr, 5);
 	$outData["results"]["averageRate"] = round($ttaxPaid / $amt, 5);
 	$outData["results"]["bpaRefund"] = $bpar + $pbpar;
-	$outData["results"]["netWithBPARefund"] = round($amt - $ttaxPaid + $bpar + $pbpar);
+	$outData["results"]["netWithBPARefund"] = round($amt - $ttaxPaid + $bpar + $pbpar, 4);
+
+
+	// Canada
+	// For now, forget about bpa
+	$revTaxPaid = 0;
+	$revRate = 0;
+	for ($i = 0; $i < count($outData["canada"]["bracket"]); $i++) {
+		if ($amt >= $outData["canada"]["bracket"][$i]["topNet"]) {
+			// it's at least the next tax bracket
+			$revTaxPaid = $revTaxPaid + $outData["canada"]["bracket"][$i]["maxTaxPaid"];
+		} else {
+			$diff = $amt - $outData["canada"]["bracket"][$i]["from"];
+			$txp = ($diff / (1 - $outData["canada"]["bracket"][$i]["rate"]) - $diff);
+			$revTaxPaid = $revTaxPaid + $txp;
+			$revRate = $outData["canada"]["bracket"][$i]["rate"];
+			break;
+		}
+	}
+	$outdata["canada"]["reverse"]["net"] = intval($amt);
+	$outData["canada"]["reverse"]["taxPaid"] = round($revTaxPaid, 4);
+	$outData["canada"]["reverse"]["gross"] = $amt + round($revTaxPaid, 4);
+
+	// Prov
+	// For now, forget about bpa
+	$prevTaxPaid = 0;
+	$prevRate = 0;
+	for ($i = 0; $i < count($outData[$prov]["bracket"]); $i++) {
+		if ($amt >= $outData[$prov]["bracket"][$i]["topNet"]) {
+			// it's at least the next tax bracket
+			$prevTaxPaid = $prevTaxPaid + $outData[$prov]["bracket"][$i]["maxTaxPaid"];
+		} else {
+			$diff = $amt - $outData[$prov]["bracket"][$i]["from"];
+			$txp = ($diff / (1 - $outData[$prov]["bracket"][$i]["rate"]) - $diff);
+			$prevTaxPaid = $prevTaxPaid + $txp;
+			$prevRate = $outData[$prov]["bracket"][$i]["rate"];
+			break;
+		}
+	}
+	$outdata[$prov]["reverse"]["net"] = intval($amt);
+	$outData[$prov]["reverse"]["taxPaid"] = round($prevTaxPaid, 4);
+	$outData[$prov]["reverse"]["gross"] = $amt + round($prevTaxPaid, 4);
+
+	$revGross = $amt/(1 - $revRate - $prevRate);
+	$revTTaxPaid = $revGross - $amt;
+
+	$outData["results"]["reverse"]["net"] = intval($amt);
+	//$outData["results"]["reverse"]["taxPaid"] = round($revTaxPaid + $prevTaxPaid, 4);
+
+	$outData["results"]["reverse"]["gross"] = round($revGross, 4);
+	$outData["results"]["reverse"]["taxPaid"] = round($revTTaxPaid, 4);
+
 } // End of calculate
 
+function combineBrackets ($prov) {
+	global $outData;
+
+	$combo =array();
+	$f = 0;
+	$p = 0;
+	$looking = true;
+	$lookingF = true;
+	$lookingP = true;
+	//$rt = $outData["canada"]["bracket"][$f]["rate"] + $outData[$prov]["bracket"][$p];
+
+	$frate = $outData["canada"]["bracket"][$f]["rate"];
+	$prate = $outData[$prov]["bracket"][$p]["rate"];
+	$rt = $frate + $prate;
+	$from = 0;
+	$failsafe = 0;
+	array_push($combo, array("rate"=>$rt, "from"=>$from));
+	do {
+		//$nf = $f+1;
+		//$np = $p+1;
+
+		//if ($f+1 >= count($outData["canada"]["bracket"])) $lookingF = false;
+		//if ($p+1 >= count($outData[$prov]["bracket"])) $lookingP = false;
+		
+		if ($lookingP && $lookingF) {
+			if ($outData["canada"]["bracket"][$f+1] < $outData[$prov]["bracket"][$p+1]) {
+				$f++;
+				if ($f < count($outData["canada"]["bracket"])) {
+					$from = $outData["canada"]["bracket"][$f]["from"];
+					$frate = $outData["canada"]["bracket"][$f]["rate"];
+				} else {
+					$lookingF = false;
+				}
+			} else {
+				$p++;
+				$from = $outData[$prov]["bracket"][$p]["from"];
+				$prate = $outData[$prov]["bracket"][$p]["rate"];
+				//} else {
+				if ($p+1 == count($outData[$prov]["bracket"])) {
+					//print "Setting lookingP to false";
+					$lookingP = false;
+				}
+			}
+		} else {
+			if ($lookingP) {
+				// $lookingF must be false.  So you've hit the top fTaxbracket
+				$p++;
+				if ($p < count($outData[$prov]["bracket"])) {
+					$from = $outData[$prov]["bracket"][$p]["from"];
+					$prate = $outData[$prov]["bracket"][$p]["rate"];
+				} else {
+					$lookingP = false;
+				}
+			} else {
+				if ($lookingF) {
+					// $lookingP must be false.  So you've hit the top pTaxBracket
+					$f++;
+					$from = $outData["canada"]["bracket"][$f]["from"];
+					$frate = $outData["canada"]["bracket"][$f]["rate"];
+					//} else {
+					if ($f+1 == count($outData["canada"]["bracket"])) {
+						$lookingF = false;
+					}
+				}
+			}
+		}
+		$rt = $frate + $prate;
+		array_push($combo, array("rate"=>round($rt, 5), "from"=>round($from, 4)));
+		
+		if ($f >= count($outData["canada"]["bracket"]) && $p >= count($outData[$prov]["bracket"])) $looking = false;
+		if ($lookingP == false && $lookingF == false) $looking = false;
+		$failsafe++;
+		if ($failsafe > 20) $looking = false;
+	} while ($looking);
+
+	$outData["combined"]["bracket"] = $combo;
+	/*$combo = $outData["canada"]["bracket"];
+	
+	for ($i = 0; $i < count($outData[$prov]["bracket"]-1); $i++) {
+		for ($j = 0; $j < count
+	}
+	*/
+
+} // End of combineBrackets
+
+function calcTops ($prov) {
+	global $outData;
+
+	// do Canada
+	for ($i = 0; $i < count($outData["canada"]["bracket"])-1; $i++) {
+		$maxTaxPaid = $outData["canada"]["bracket"][$i+1]["from"] * $outData["canada"]["bracket"][$i]["rate"];
+		$outData["canada"]["bracket"][$i]["maxTaxPaid"] = $maxTaxPaid;
+		$outData["canada"]["bracket"][$i]["topNet"] = $outData["canada"]["bracket"][$i+1]["from"] - $maxTaxPaid;
+	}
+
+	// do Province
+	for ($i = 0; $i < count($outData[$prov]["bracket"])-1; $i++) {
+		$maxTaxPaid = $outData[$prov]["bracket"][$i+1]["from"] * $outData[$prov]["bracket"][$i]["rate"];
+		$outData[$prov]["bracket"][$i]["maxTaxPaid"] = $maxTaxPaid;
+		$outData[$prov]["bracket"][$i]["topNet"] = $outData[$prov]["bracket"][$i+1]["from"] - $maxTaxPaid;
+	}
+
+} // End of calcTops
 
 ?>
 
