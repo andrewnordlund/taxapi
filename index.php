@@ -2,7 +2,7 @@
 // All this from https://code.tutsplus.com/how-to-build-a-simple-rest-api-in-php--cms-37000t
 require "inc/bootstrap.php";
 
-$version = "0.1.3-a1";
+$version = "0.1.3-a2";
 
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
@@ -198,14 +198,34 @@ function calculate($amt, $prov) {
 	$outData[$prov]["reverse"]["taxPaid"] = round($prevTaxPaid, 4);
 	$outData[$prov]["reverse"]["gross"] = $amt + round($prevTaxPaid, 4);
 
-	$revGross = $amt/(1 - $revRate - $prevRate);
-	$revTTaxPaid = $revGross - $amt;
+	// Combined
+	$trevTaxPaid = 0;
+	$trevTate = 0;
+	for ($i = 0; $i < count($outData["combined"]["bracket"]); $i++) {
+		if ($amt > $outData["combined"]["bracket"][$i]["topNet"]) {
+			// It's at least the next tax bracket
+			$trevTaxPaid = $outData["combined"]["bracket"][$i]["maxTotalTaxPaid"];
+		} else {
+			// Find out how much tax paid in this bracket.
+			$diff = $amt;
+			if ($i > 0) {
+				$diff = $amt - $outData["combined"]["bracket"][$i-1]["topNet"];
+			}
+			//$diff = $amt - $outData["combined"]["bracket"][$i]["from"];
+			$txp = ($diff / (1-$outData["combined"]["bracket"][$i]["rate"]));
+			//$txp = ($diff / (1 - $outData["combined"]["bracket"][$i]["rate"]) - $diff);
+			$trevTaxPaid = $trevTaxPaid + $txp;
+			$trevRate = $outData["combined"]["bracket"][$i]["rate"];
+			break;
+		}
+	}
+
 
 	$outData["results"]["reverse"]["net"] = intval($amt);
 	//$outData["results"]["reverse"]["taxPaid"] = round($revTaxPaid + $prevTaxPaid, 4);
 
-	$outData["results"]["reverse"]["gross"] = round($revGross, 4);
-	$outData["results"]["reverse"]["taxPaid"] = round($revTTaxPaid, 4);
+	$outData["results"]["reverse"]["taxPaid"] = round($trevTaxPaid, 4);
+	$outData["results"]["reverse"]["gross"] = $amt + round($trevTaxPaid, 4);
 
 } // End of calculate
 
@@ -236,10 +256,9 @@ function combineBrackets ($prov) {
 		if ($lookingP && $lookingF) {
 			if ($outData["canada"]["bracket"][$f+1] < $outData[$prov]["bracket"][$p+1]) {
 				$f++;
-				if ($f < count($outData["canada"]["bracket"])) {
-					$from = $outData["canada"]["bracket"][$f]["from"];
-					$frate = $outData["canada"]["bracket"][$f]["rate"];
-				} else {
+				$from = $outData["canada"]["bracket"][$f]["from"];
+				$frate = $outData["canada"]["bracket"][$f]["rate"];
+				if ($f+1 == count($outData["canada"]["bracket"])) {
 					$lookingF = false;
 				}
 			} else {
@@ -256,10 +275,9 @@ function combineBrackets ($prov) {
 			if ($lookingP) {
 				// $lookingF must be false.  So you've hit the top fTaxbracket
 				$p++;
-				if ($p < count($outData[$prov]["bracket"])) {
-					$from = $outData[$prov]["bracket"][$p]["from"];
-					$prate = $outData[$prov]["bracket"][$p]["rate"];
-				} else {
+				$from = $outData[$prov]["bracket"][$p]["from"];
+				$prate = $outData[$prov]["bracket"][$p]["rate"];
+				if ($p+1 == count($outData[$prov]["bracket"])) {
 					$lookingP = false;
 				}
 			} else {
@@ -297,9 +315,22 @@ function combineBrackets ($prov) {
 function calcTops ($prov) {
 	global $outData;
 
+	$ju = array("canada", $prov, "combined");
+	for ($j = 0; $j<count($ju); $j++) {
+		$maxTotalTaxPaid = 0;
+		for ($i = 0; $i < count($outData[$ju[$j]]["bracket"])-1; $i++) {
+			$maxTaxPaid = ($outData[$ju[$j]]["bracket"][$i+1]["from"] - $outData[$ju[$j]]["bracket"][$i]["from"]) * $outData[$ju[$j]]["bracket"][$i]["rate"];
+			$outData[$ju[$j]]["bracket"][$i]["maxTaxPaid"] = $maxTaxPaid;
+			$maxTotalTaxPaid = $maxTotalTaxPaid + $maxTaxPaid;
+			$outData[$ju[$j]]["bracket"][$i]["maxTotalTaxPaid"] = $maxTotalTaxPaid;
+			$outData[$ju[$j]]["bracket"][$i]["topNet"] = $outData[$ju[$j]]["bracket"][$i+1]["from"] - $maxTotalTaxPaid;
+		}
+	}
+
+	/*
 	// do Canada
 	for ($i = 0; $i < count($outData["canada"]["bracket"])-1; $i++) {
-		$maxTaxPaid = $outData["canada"]["bracket"][$i+1]["from"] * $outData["canada"]["bracket"][$i]["rate"];
+		$maxTaxPaid = ($outData["canada"]["bracket"][$i+1]["from"] - $outData["canada"]["bracket"][$i]["from"]) * $outData["canada"]["bracket"][$i]["rate"];
 		$outData["canada"]["bracket"][$i]["maxTaxPaid"] = $maxTaxPaid;
 		$outData["canada"]["bracket"][$i]["topNet"] = $outData["canada"]["bracket"][$i+1]["from"] - $maxTaxPaid;
 	}
@@ -310,6 +341,14 @@ function calcTops ($prov) {
 		$outData[$prov]["bracket"][$i]["maxTaxPaid"] = $maxTaxPaid;
 		$outData[$prov]["bracket"][$i]["topNet"] = $outData[$prov]["bracket"][$i+1]["from"] - $maxTaxPaid;
 	}
+
+	// do Combo
+	for ($i = 0; $i < count($outData["combined"]["bracket"])-1; $i++) {
+		$maxTaxPaid = $outData["combined"]["bracket"][$i+1]["from"] * $outData["combined"]["bracket"][$i]["rate"];
+		$outData["combined"]["bracket"][$i]["maxTaxPaid"] = $maxTaxPaid;
+		$outData["combined"]["bracket"][$i]["topNet"] = $outData["combined"]["bracket"][$i+1]["from"] - $maxTaxPaid;
+	}
+	*/
 
 } // End of calcTops
 
