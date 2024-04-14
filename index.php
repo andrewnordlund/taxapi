@@ -2,7 +2,7 @@
 // All this from https://code.tutsplus.com/how-to-build-a-simple-rest-api-in-php--cms-37000t
 require "inc/bootstrap.php";
 
-$version = "0.1.3-a2";
+$version = "0.0.3";
 
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
@@ -306,12 +306,6 @@ function combineBrackets ($prov) {
 	} while ($looking);
 
 	$outData["combined"]["bracket"] = $combo;
-	/*$combo = $outData["canada"]["bracket"];
-	
-	for ($i = 0; $i < count($outData[$prov]["bracket"]-1); $i++) {
-		for ($j = 0; $j < count
-	}
-	*/
 
 } // End of combineBrackets
 
@@ -329,29 +323,6 @@ function calcTops ($prov) {
 			$outData[$ju[$j]]["bracket"][$i]["topNet"] = $outData[$ju[$j]]["bracket"][$i+1]["from"] - $maxTotalTaxPaid;
 		}
 	}
-
-	/*
-	// do Canada
-	for ($i = 0; $i < count($outData["canada"]["bracket"])-1; $i++) {
-		$maxTaxPaid = ($outData["canada"]["bracket"][$i+1]["from"] - $outData["canada"]["bracket"][$i]["from"]) * $outData["canada"]["bracket"][$i]["rate"];
-		$outData["canada"]["bracket"][$i]["maxTaxPaid"] = $maxTaxPaid;
-		$outData["canada"]["bracket"][$i]["topNet"] = $outData["canada"]["bracket"][$i+1]["from"] - $maxTaxPaid;
-	}
-
-	// do Province
-	for ($i = 0; $i < count($outData[$prov]["bracket"])-1; $i++) {
-		$maxTaxPaid = $outData[$prov]["bracket"][$i+1]["from"] * $outData[$prov]["bracket"][$i]["rate"];
-		$outData[$prov]["bracket"][$i]["maxTaxPaid"] = $maxTaxPaid;
-		$outData[$prov]["bracket"][$i]["topNet"] = $outData[$prov]["bracket"][$i+1]["from"] - $maxTaxPaid;
-	}
-
-	// do Combo
-	for ($i = 0; $i < count($outData["combined"]["bracket"])-1; $i++) {
-		$maxTaxPaid = $outData["combined"]["bracket"][$i+1]["from"] * $outData["combined"]["bracket"][$i]["rate"];
-		$outData["combined"]["bracket"][$i]["maxTaxPaid"] = $maxTaxPaid;
-		$outData["combined"]["bracket"][$i]["topNet"] = $outData["combined"]["bracket"][$i+1]["from"] - $maxTaxPaid;
-	}
-	*/
 
 } // End of calcTops
 
