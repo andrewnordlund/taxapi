@@ -200,32 +200,35 @@ function calculate($amt, $prov) {
 
 	// Combined
 	$trevTaxPaid = 0;
-	$trevTate = 0;
+	$trevRate = 0;
+	$tFrom = 0;
 	for ($i = 0; $i < count($outData["combined"]["bracket"]); $i++) {
 		if ($amt > $outData["combined"]["bracket"][$i]["topNet"]) {
 			// It's at least the next tax bracket
-			$trevTaxPaid = $outData["combined"]["bracket"][$i]["maxTotalTaxPaid"];
+			$trevTaxPaid = $trevTaxPaid + $outData["combined"]["bracket"][$i]["maxTaxPaid"];
 		} else {
 			// Find out how much tax paid in this bracket.
-			$diff = $amt;
-			if ($i > 0) {
-				$diff = $amt - $outData["combined"]["bracket"][$i-1]["topNet"];
-			}
+			//$diff = $amt;
+			//if ($i > 0) {
+			//	$diff = $amt - $outData["combined"]["bracket"][$i-1]["topNet"];
+			//}
 			//$diff = $amt - $outData["combined"]["bracket"][$i]["from"];
-			$txp = ($diff / (1-$outData["combined"]["bracket"][$i]["rate"]));
+			//$txp = ($diff / (1-$outData["combined"]["bracket"][$i]["rate"]));
 			//$txp = ($diff / (1 - $outData["combined"]["bracket"][$i]["rate"]) - $diff);
-			$trevTaxPaid = $trevTaxPaid + $txp;
+			//$trevTaxPaid = $outData["combined"]["bracket"][$i]["maxTotalTaxPaid"];
 			$trevRate = $outData["combined"]["bracket"][$i]["rate"];
+			$tFrom = $outData["combined"]["bracket"][$i]["from"];
 			break;
 		}
 	}
 
+	$gross = ($amt + $trevTaxPaid - ($trevRate * $tFrom))/(1-$trevRate);
 
 	$outData["results"]["reverse"]["net"] = intval($amt);
 	//$outData["results"]["reverse"]["taxPaid"] = round($revTaxPaid + $prevTaxPaid, 4);
 
-	$outData["results"]["reverse"]["taxPaid"] = round($trevTaxPaid, 4);
-	$outData["results"]["reverse"]["gross"] = $amt + round($trevTaxPaid, 4);
+	$outData["results"]["reverse"]["taxPaid"] = round($gross - $amt, 4);  //round($trevTaxPaid, 4);
+	$outData["results"]["reverse"]["gross"] = round($gross, 4);
 
 } // End of calculate
 
