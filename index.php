@@ -2,7 +2,7 @@
 // All this from https://code.tutsplus.com/how-to-build-a-simple-rest-api-in-php--cms-37000t
 require "inc/bootstrap.php";
 
-$version = "0.0.6";
+$version = "0.1.0";
 
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
