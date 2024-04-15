@@ -2,7 +2,7 @@
 // All this from https://code.tutsplus.com/how-to-build-a-simple-rest-api-in-php--cms-37000t
 require "inc/bootstrap.php";
 
-$version = "0.0.4";
+$version = "0.0.6";
 
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
@@ -250,7 +250,7 @@ function combineBrackets ($prov) {
 	do {
 		
 		if ($lookingP && $lookingF) {
-			if ($outData["canada"]["bracket"][$f+1] < $outData[$prov]["bracket"][$p+1]) {
+			if ($outData["canada"]["bracket"][$f+1]["from"] < $outData[$prov]["bracket"][$p+1]["from"]) {
 				$f++;
 				$from = $outData["canada"]["bracket"][$f]["from"];
 				$frate = $outData["canada"]["bracket"][$f]["rate"];
@@ -308,10 +308,10 @@ function calcTops ($jur) {
 	$maxTotalTaxPaid = 0;
 	for ($i = 0; $i < count($outData[$jur]["bracket"])-1; $i++) {
 		$maxTaxPaid = ($outData[$jur]["bracket"][$i+1]["from"] - $outData[$jur]["bracket"][$i]["from"] + 0.01) * $outData[$jur]["bracket"][$i]["rate"];
-		$outData[$jur]["bracket"][$i]["maxTaxPaid"] = $maxTaxPaid;
+		$outData[$jur]["bracket"][$i]["maxTaxPaid"] = round($maxTaxPaid, 4);
 		$maxTotalTaxPaid = $maxTotalTaxPaid + $maxTaxPaid;
-		$outData[$jur]["bracket"][$i]["maxTotalTaxPaid"] = $maxTotalTaxPaid;
-		$outData[$jur]["bracket"][$i]["topNet"] = $outData[$jur]["bracket"][$i+1]["from"] - $maxTotalTaxPaid;
+		$outData[$jur]["bracket"][$i]["maxTotalTaxPaid"] = round($maxTotalTaxPaid, 4);
+		$outData[$jur]["bracket"][$i]["topNet"] = round($outData[$jur]["bracket"][$i+1]["from"] - $maxTotalTaxPaid, 4);
 		if ($jur != "combined") $outData[$jur]["maxBPARefund"] = $outData[$jur]["bpa"] * $outData[$jur]["bracket"][0]["rate"];
 	}
 
