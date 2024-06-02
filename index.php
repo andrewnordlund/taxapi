@@ -2,7 +2,7 @@
 // All this from https://code.tutsplus.com/how-to-build-a-simple-rest-api-in-php--cms-37000t
 require __DIR__ . "/inc/bootstrap.php";
 $logging=!true;
-$version = "0.1.1-a3";
+$version = "0.1.1";
 
 $uri = parse_url($_SERVER['REQUEST_URI']); //, PHP_URL_PATH);
 
@@ -105,10 +105,10 @@ function calculate($amt, $prov=null, $logging=false) {
 
 	if ($logging) print "Calculating for \$" . $amt . " in $prov.<br>\n";
 	// Federal
-	calcTaxes($amt, "canada");
+	calcTaxes($amt, "canada", $logging);
 	// Provincial
 	if ($prov) {
-		calcTaxes($amt, $prov);
+		calcTaxes($amt, $prov, $logging);
 	}
 
 	$ttaxPaid = $outData["canada"]["taxPaid"];
@@ -186,7 +186,7 @@ function calculate($amt, $prov=null, $logging=false) {
 
 } // End of calculate
 
-function calcTaxes ($amt, $jur) {
+function calcTaxes ($amt, $jur, $logging=false) {
 	global $outData;
 	$taxPaid = 0;
 	$bracket = 0;
@@ -197,11 +197,14 @@ function calcTaxes ($amt, $jur) {
 			// it's at least the next tax bracket.
 		} else {
 			// it's this one
-			//print "In tax bracket $i.<Br>\n";
+			if ($logging) print "In tax bracket $i.<Br>\n";
 			$bracket = $i+1;
-			$taxPaid = $outData[$jur]["bracket"][$i]["maxTaxPaid"] + ($outData[$jur]["bracket"][$i]["rate"] * ($amt - ($outData[$jur]["bracket"][$i]["from"] + 0.01)));
 			$mtr = $outData[$jur]["bracket"][$i]["rate"];
-			
+			if ($i == 0) {
+				$taxPaid = $amt * $outData[$jur]["bracket"][$i]["rate"];
+			} else {
+				$taxPaid = $outData[$jur]["bracket"][$i]["maxTaxPaid"] + ($outData[$jur]["bracket"][$i]["rate"] * ($amt - ($outData[$jur]["bracket"][$i]["from"] + 0.01)));
+			}
 			break;
 		}
 	}
