@@ -1,12 +1,14 @@
 <?php
 // All this from https://code.tutsplus.com/how-to-build-a-simple-rest-api-in-php--cms-37000t
-require "inc/bootstrap.php";
+require __DIR__ . "/inc/bootstrap.php";
+$logging=!true;
+$version = "0.1.1-a3";
 
-$version = "0.1.0";
+$uri = parse_url($_SERVER['REQUEST_URI']); //, PHP_URL_PATH);
 
-$uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-
-$uri = explode( '/', $uri );
+//$uri = explode( '/', $uri );
+$uri = explode('/', trim($uri['path'], '/'));
+if ($logging)print "uri: " . var_dump($uri) . ".<br>\n";
 //print_r($uri);
 /* 
    taxapi/{prov}/info?amn=12345
@@ -21,8 +23,9 @@ if (isset($uri[3])) {
 	$year = date("Y");
 	$prov = null;
 	
-	for ($i = 3; $i < count($uri); $i++) {
-		if (preg_match("/^\d\d\d\d$/", $uri[$i])) {
+	for ($i = 2; $i < count($uri); $i++) {
+		if ($logging) print "Checking " . $uri[$i] . ".<Br>\n";
+		if (preg_match("/^20[1-2]\d$/", $uri[$i])) {
 			if (array_key_exists($uri[$i], $taxInfo["canada"])) {
 				$year = $uri[$i];
 				//break;
@@ -35,9 +38,12 @@ if (isset($uri[3])) {
 			//print "Could be a province: " . $uri[$i] . "<br>\n";
 			if (array_key_exists($uri[$i], $taxInfo)) {
 				$prov = $uri[$i];
-			//	print "It's a province: $prov.<br>\n";
+				if ($logging) print "It's a province: $prov.<br>\n";
 				//break;
 			}
+		} elseif (preg_match("/^\\$?([\d,]+(\.\d\d?)?)$/", $uri[$i], $amnt)) {
+			$amt = str_replace(",", "", $amnt[1]);
+			if ($logging) print "Setting \$amt to $amt.<br>\n";
 		} elseif (preg_match("/^amt=(\d+(\.\d\d?)?)/i", $uri[$i], $amnt)) {
 			$amt = $amnt[1];
 		}
@@ -70,7 +76,9 @@ if (isset($uri[3])) {
 		calcTops ("combined");
 	}
 	if ($amt) {
-		calculate($amt, $prov);
+		calculate($amt, $prov, $logging);
+	} else {
+		if ($logging) print "Not calculating amounts because \$amt is $amt.<br>\n";
 	}
 
 //if ((isset($uri[3]) && $uri[3] != 'user') || !isset($uri[4])) {
@@ -92,10 +100,10 @@ $objFeedController = new UserController($outData);
 //$objFeedController->{$strMethodName}();
 $objFeedController->sendResp();
 
-function calculate($amt, $prov=null) {
+function calculate($amt, $prov=null, $logging=false) {
 	global $outData;
 
-	//print "Calculating for \$" . $amt . " in $prov.<br>\n";
+	if ($logging) print "Calculating for \$" . $amt . " in $prov.<br>\n";
 	// Federal
 	calcTaxes($amt, "canada");
 	// Provincial
