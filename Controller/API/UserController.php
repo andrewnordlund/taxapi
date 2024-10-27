@@ -66,15 +66,19 @@ class UserController extends BaseController {
 				array('Content-Type: application/json', $strErrorHeader)
 			);
 		} else {
-			$this->sendOutput(
-				json_encode($this->outData),
-				array('Content-Type: application/json', 'HTTP/1.1 200 OK')
-			);
+			if (is_array($this->outData)) {
+				$this->sendOutput(
+					json_encode($this->outData),
+					array('Content-Type: application/json', 'HTTP/1.1 200 OK')
+				);
+			} elseif (is_string($this->outData)) {
+				$this->sendOutput($this->outData, array('Content-Type: text/html', 'HTTP/1.1 200 OK'));
+			}
 		}
 	} // End of sendResp
 
 	public function setOutData($od) {
-		if (is_array($od)) {
+		if (is_array($od) || is_string($od)) {
 			$this->outData = $od;
 		}
 	} // End of setOutData

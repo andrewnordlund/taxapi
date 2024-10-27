@@ -2,7 +2,7 @@
 // All this from https://code.tutsplus.com/how-to-build-a-simple-rest-api-in-php--cms-37000t
 require __DIR__ . "/inc/bootstrap.php";
 $logging=!true;
-$version = "0.1.1";
+$version = "0.2.0-a1";
 
 $uri = parse_url($_SERVER['REQUEST_URI']); //, PHP_URL_PATH);
 
@@ -16,8 +16,9 @@ if ($logging)print "uri: " . var_dump($uri) . ".<br>\n";
    if info is not blank return the above with calculations
 
  */
-$action = "showAll";
+$action = "nothing";
 $outData = array("version"=>$version); //$taxInfo;
+$errData = null;
 if (isset($uri[3])) {
 	$amt = null;
 	$year = date("Y");
@@ -83,6 +84,7 @@ if (isset($uri[3])) {
 
 //if ((isset($uri[3]) && $uri[3] != 'user') || !isset($uri[4])) {
 } else {
+	if ($logging) print "Gonna show about page instead.<br>\n";
 	/*
 	if (preg_match("/info/", $uri[3])) {
 		// do stuff
@@ -91,11 +93,139 @@ if (isset($uri[3])) {
 	//header("HTTP/1.1 404 Not Found");
 	//exit();
 	//}
-	$outData = $taxInfo;
+	$outData = "<!DOCTYPE html>
+<html lang=\"en\">
+	<head>
+		<meta charset=\"utf-8\">
+		<title>Nordburg Tax API</title>
+		<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
+		
+		<meta name=\"dcterms.title\" content=\"Nordburg Tax API\">\n";
+	$outData .= "\t\t<!-- Bootstrap CSS -->
+		<link href=\"https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css\" rel=\"stylesheet\" integrity=\"sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH\" crossorigin=\"anonymous\">\n";
+
+	/*$outData .= "\t\t<!-- Font Awesome -->
+		<link href=\"https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css\" rel=\"stylesheet\" integrity=\"sha384-nuHCjNuZX5ZIwux2wKr/+zvVqeOmBqGNeMzhC/6ps1O38tq1xjnlBxFwt3sE7gBd\" crossorigin=\"anonymous\">\n";
+		*/
+	
+	$outData .= "\t</head>\n\t<body class=\"body\">\n";
+	$outData .= "\t\t<header>\n\t\t\t<div class=\"container\">\n\t\t\t\t<div class=\"row\"><h1>Nordburg Tax API</h1></div</div></header>\n";
+	$outData .= "\t\t<main>\n";
+	$outData .= "\n\t\t\t<div class=\"container\">\n\t\t\t\t<div class=\"row\">\t\t\t<p>The Nordburg Tax API allows you to get Canadian income tax data estimates in JSON so you can see information about tax brakets, marginal and average tax rates, etc.</p>\n";
+	$outData .= "\t\t\t<h3>Disclaimer</h3>\n";
+	$outData .= "\t\t\t<p>I built this/am building this to learn to make a RESTful API.  It is <em>extremely</em> proof-of-concept.  I'm not 100% clear on how the Basic Personal Amount works, so that part may be <em>way</em> off. Please do not use for anything important!</p>\n";
+	$outData .= "\t\t\t<h2>Usage</h2>\n";
+	$outData .= "\t\t\t<p>To use this, you need to provide a year (2024 or later), a province code, and a dollar amount.  Example: <code>/taxapi/index.php/2024/on/40000</code> will give you information about income taxes in Ontario for $40&nbsp;000.00 in 2024.  The information it gives includes:</p>\n";
+	$outData .= "\t\t\t<ul class=\"ms-4\">\n";
+	$outData .= "\t\t\t\t<li>All tax brackets for Canada</li>\n";
+	$outData .= "\t\t\t\t<li>All tax brackets for Ontario</li>\n";
+	$outData .= "\t\t\t\t<li>Tax paid in each bracket up to the marginal bracket</li>\n";
+	$outData .= "\t\t\t\t<li>Total tax paid</li>\n";
+	$outData .= "\t\t\t\t<li>Marginal tax rate</li>\n";
+	$outData .= "\t\t\t\t<li>Average tax rate</li>\n";
+	$outData .= "\t\t\t\t<li>Basic Personal Amount</li>\n";
+	$outData .= "\t\t\t\t<li>The net amount</li>\n";
+	$outData .= "\t\t\t\t<li>Assuming that the amount provided is the net amount, it calculates what the required gross amount would be.</li>\n";
+	$outData .= "\t\t\t</ul>\n";
+	$outData .= "\t\t\t<p>See it in action: <a href=\"/taxapi/index.php/2024/on/40000\">/taxapi/index.php/2024/on/40000</a>.</p>\n";
+	$outData .= "\t\t\t<details class=\" border border-primary rounded\">\n";
+	$outData .= "\t\t\t<summary class=\"text-decoration-underline\" style=\"color: blue\">JSON Output</summary>\n";
+	$outData .= "\t\t\t\t<div class=\"mt-3\">\n";
+	$outData .= "\t\t\t<code><pre>\n";
+	$outData .= "{...
+	\"canada\": {
+		\"name\":\"Canada\",
+		\"bracket\":[
+			{
+				\"from\":0,
+				\"rate\":0.15,
+				\"maxTaxPaid\":8381.4015,
+				\"maxTotalTaxPaid\":8381.4015,
+				\"topNet\":47494.5985
+			},
+			{
+				\"from\":55876,
+				\"rate\":0.205,
+				\"maxTaxPaid\":11458.8871,
+				\"maxTotalTaxPaid\":19840.2886,
+				\"topNet\":91932.7115},			
+	...
+	}
+	...
+	\"on\":{
+		\"name\":\"Ontario\",
+		\"bracket\":[
+			{
+				\"from\":0,
+				\"rate\":0.0505,
+				\"maxTaxPaid\":2598.0235,
+				\"maxTotalTaxPaid\":2598.0235,
+				\"topNet\":48847.9765},
+			}
+	...
+	}
+	\"results\":{
+		\"gross\":40000,
+		\"net\":31980,
+		\"taxPaid\":8020,
+		\"marginalRate\":0.2005,
+		\"averageRate\":0.2005,
+		\"bpaRefund\":2981.8995,
+		\"netWithBPARefund\":34961.8995,
+		\"reverse\":{
+			\"gross\":50031.2695,
+			\"taxPaid\":10031.2695,
+			\"includingBPA\":{
+				\"net\":37018.1005,
+				\"gross\":46301.5641,
+				\"taxPaid\":9283.4636
+			}
+		}
+	}
+}";
+	$outData .= "\t\t\t</pre></code>\n";
+	$outData .= "\t\t\t</div>\n";
+	$outData .= "\t\t\t</details>\n";
+	//$thisPage->addToContent("<p></p>\n");
+	//$thisPage->addToContent("<p></p>\n");
+	//$thisPage->addToContent("<p></p>\n");
+	$outData .= "\t\t\t<h3>Province Codes</h3>\n";
+	$outData .= "\t\t\t<ol class=\"ms-4\">\n";
+	$outData .= "\t\t\t<li>canada (for just information on Canadian income tax, without provincial data)</li>\n";
+	$outData .= "\t\t\t<li>nwfl</li>\n";
+	$outData .= "\t\t\t<li>pei</li>\n";
+	$outData .= "\t\t\t<li>ns</li>\n";
+	$outData .= "\t\t\t<li>nb</li>\n";
+	$outData .= "\t\t\t<li>qc</li>\n";
+	$outData .= "\t\t\t<li>on</li>\n";
+	$outData .= "\t\t\t<li>mn</li>\n";
+	$outData .= "\t\t\t<li>sk</li>\n";
+	$outData .= "\t\t\t<li>ab</li>\n";
+	$outData .= "\t\t\t<li>bc</li>\n";
+	$outData .= "\t\t\t<li>nwt</li>\n";
+	$outData .= "\t\t\t<li>nu</li>\n";
+	$outData .= "\t\t\t<li>yk</li>\n";
+	$outData .= "\t\t\t</ul>\n";
+	$outData .= "\t\t</div></div></main>\n";
+	$outData .= "\t\t<footer class=\"small border-top\">\n";
+	$outData .= "\n\t\t\t<div class=\"container\">\n\t\t\t\t<div class=\"row\">\t\t<h2 class=\"visually-hidden\">Footer</h2>\n";
+	$outData .= "\t\t<ol>\n";
+	$outData .= "\t\t\t<li><a href=\"https://github.com/andrewnordlund/taxapi/\">GitHub Repo</a></li>\n";
+	$outData .= "\t\t\t<li>Find an something wrong?  Missing feature? <a href=\"https://github.com/andrewnordlund/taxapi/issues\">Submit an Issue</a>.</li>\n";
+	$outData .= "\t\t</ol>\n";
+	$outData .= "</div></div>\t\t</footer>\n";
+	$outData .= "\t</body>\n";
+	$outData .= "</html>\n";
+
+	//$outData
+	//$outData = $thisPage->toString();
+	//if ($logging) print "Page is now: " . $outData . "<br>\n";
+	//$outData = 
 }
 require PROJECT_ROOT_PATH . "/Controller/API/UserController.php";
 
 $objFeedController = new UserController($outData);
+if ($errData) $objFeedController->setErrData($errData);
 //$strMethodName = $action . 'Action';
 //$objFeedController->{$strMethodName}();
 $objFeedController->sendResp();

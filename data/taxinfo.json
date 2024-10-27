@@ -1,5 +1,6 @@
 {
 	"canada" : {
+		"name" : "Canada",
 		"2024" : {
 			"bracket" : [
 				{
@@ -27,6 +28,7 @@
 		}
 	},
 	"nwfl" : {
+		"name" : "Newfoundland and Labrador",
 		"2024" : {
 			"bracket" : [
 				{
@@ -66,6 +68,7 @@
 		}
 	},
 	"pei" : {
+		"name" : "Prince Edward Island",
 		"2024" : {
 			"bracket" : [
 				{
@@ -93,6 +96,7 @@
 		}
 	},
 	"ns" : {
+		"name" : "Nova Scotia",
 		"2024" : {
 			"bracket" : [
 				{
@@ -120,6 +124,7 @@
 		}
 	},
 	"nb" : {
+		"name" : "New Brunswick",
 		"2024" : {
 			"bracket" : [
 				{
@@ -143,6 +148,7 @@
 		}
 	},
 	"qc" : {
+		"name" : "Quebec",
 		"2024" : {
 			"bracket" : [
 				{
@@ -166,6 +172,7 @@
 		}
 	},
 	"on" : {
+		"name" : "Ontario",
 		"2024" : {
 			"bracket" : [
 				{
@@ -193,6 +200,7 @@
 		}
 	},
 	"mn" : {
+		"name" : "Manitoba",
 		"2024" : {
 			"bracket" : [
 				{
@@ -212,6 +220,7 @@
 		}
 	},
 	"sk" : {
+		"name" : "Saskatchewan",
 		"2024" : {
 			"bracket" : [
 				{
@@ -231,6 +240,7 @@
 		}
 	},
 	"ab" : {
+		"name" : "Alberta",
 		"2024" : {
 			"bracket" : [
 				{
@@ -258,6 +268,7 @@
 		}
 	},
 	"bc" : {
+		"name" : "British Columbia",
 		"2024" : {
 			"bracket" : [
 				{
@@ -295,6 +306,7 @@
 		}
 	},
 	"nwt" : {
+		"name" : "Northwest Territories",
 		"2024" : {
 			"bracket" : [
 				{
@@ -318,6 +330,7 @@
 		}
 	},
 	"nu" : {
+		"name" : "Nunavut",
 		"2024" : {
 			"bracket" : [
 				{
@@ -342,6 +355,7 @@
 	},
 	"yk" : {
 		"2024" : {
+		"name" : "Yukon",
 			"bracket" : [
 				{
 					"from" : 0,
@@ -367,6 +381,4 @@
 			"bpa" : 14156
 		}
 	}
-
-
 }
