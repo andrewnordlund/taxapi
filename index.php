@@ -66,6 +66,7 @@ if (isset($uri[3])) {
 			
 		}
 		$outData[$prov]["year"] = $pyear;
+		if ($prov == "on") $outData[$prov]["ohp"] = $taxInfo[$prov]["ohp"];
 	}
 	
 	$res = null;
@@ -238,6 +239,7 @@ function calculate($amt, $prov=null, $logging=false) {
 	calcTaxes($amt, "canada", $logging);
 	// Provincial
 	if ($prov) {
+		if ($prov == "on") calcOHP ($amt, $logging);
 		calcTaxes($amt, $prov, $logging);
 	}
 
@@ -457,6 +459,36 @@ function calcTops ($jur) {
 	}
 
 } // End of calcTops
+
+function calcOHP ($amt, $logging) {
+	global $outData;
+
+	$prem = 0;
+	$looking = true;
+
+	for ($i = 0; $i < count($outData["on"]["ohp"]) -1 && $looking; $i++) {
+		if ($outData["on"]["ohp"][$i]["premium"] > 1) $prem = $outData["on"]["ohp"][$i]["premium"];
+		if ($amt > $outData["on"]["ohp"][$i+1]["from"]) {
+		} else {
+			if ($outData["on"]["ohp"][$i]["premium"] > 1) {
+				// Keep going
+			} else {
+				$rate = $outData["on"]["ohp"][$i]["premium"];
+				$amount = $amt - $outData["on"]["ohp"][$i]["from"];
+				$prem = $prem + ($rate * $amount);
+			}
+			$looking = false;
+		}
+	}
+
+	//for (
+
+	$outData["on"]["OHPPremium"] = $prem;
+	$outData["combined"]["OHPPremium"] = $prem;
+
+	
+
+} // End of calcOHP
 
 ?>
 
