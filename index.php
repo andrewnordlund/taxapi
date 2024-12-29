@@ -42,10 +42,10 @@ if (isset($uri[3])) {
 				if ($logging) print "It's a province: $prov.<br>\n";
 				//break;
 			}
-		} elseif (preg_match("/^\\$?([\d,]+(\.\d\d?)?)$/", $uri[$i], $amnt)) {
+		} elseif (preg_match("/^\\$?([\d,]+(\.\d\d?\d?\d?)?)$/", $uri[$i], $amnt)) {
 			$amt = str_replace(",", "", $amnt[1]);
 			if ($logging) print "Setting \$amt to $amt.<br>\n";
-		} elseif (preg_match("/^amt=(\d+(\.\d\d?)?)/i", $uri[$i], $amnt)) {
+		} elseif (preg_match("/^amt=(\d+(\.\d\d?\d?\?)?)/i", $uri[$i], $amnt)) {
 			$amt = $amnt[1];
 		}
 	}
@@ -259,7 +259,7 @@ function calculate($amt, $prov=null, $logging=false) {
 		$tbpar += $outData[$prov]["bpaRefund"];
 	}
 	$outData["results"] = array();
-	$outData["results"]["gross"] = intval($amt);
+	$outData["results"]["gross"] = round($amt, 2);
 	$outData["results"]["net"] = round($amt - $ttaxPaid, 4);
 	$outData["results"]["taxPaid"] = round($ttaxPaid, 4);
 	$outData["results"]["marginalRate"] = round($ttr, 5);
@@ -272,7 +272,7 @@ function calculate($amt, $prov=null, $logging=false) {
 	$outData["canada"]["net"] = round($amt - $outData["canada"]["taxPaid"], 4);
 	$outData["canada"]["netWithBPARefund"] = round($amt - $outData["canada"]["taxPaid"] + $outData["canada"]["bpaRefund"], 4);
 	$gross = calcReverse($amt, "canada");
-	$outData["canada"]["reverse"]["net"] = intval($amt);
+	$outData["canada"]["reverse"]["net"] = round($amt,2);
 	$outData["canada"]["reverse"]["gross"] = round($gross, 4);
 	$outData["canada"]["reverse"]["taxPaid"] = round($gross - $amt, 4);
 
@@ -289,7 +289,7 @@ function calculate($amt, $prov=null, $logging=false) {
 		$outData[$prov]["net"] = round($amt - $outData[$prov]["taxPaid"], 4);
 		$outData[$prov]["netWithBPARefund"] = round($amt - $outData[$prov]["taxPaid"] + $outData[$prov]["bpaRefund"], 4);
 		$gross = calcReverse($amt, $prov);
-		$outData[$prov]["reverse"]["net"] = intval($amt);
+		$outData[$prov]["reverse"]["net"] = round($amt, 2);
 		$outData[$prov]["reverse"]["gross"] = round($gross, 4);
 		$outData[$prov]["reverse"]["taxPaid"] = round($gross - $amt, 4);
 
@@ -303,7 +303,7 @@ function calculate($amt, $prov=null, $logging=false) {
 		
 		// Combined
 		$gross = calcReverse($amt, "combined");
-		$outData["results"]["reverse"]["net"] = intval($amt);
+		$outData["results"]["reverse"]["net"] = round($amt, 2);
 		$outData["results"]["reverse"]["gross"] = round($gross, 4);
 		$outData["results"]["reverse"]["taxPaid"] = round($gross - $amt, 4);
 
@@ -385,6 +385,16 @@ function calcReverse ($amt, $jur) {
 	$revTaxPaid = 0;
 	$revRate = 0;
 	$From = 0;
+	for ($i = count($outData[$jur]["bracket"])-1; $i>=0; $i--) {
+		if ($amt > $outData[$jur]["bracket"][$i]["from"]) {
+			// it's the one
+			$revRate = $outData[$jur]["bracket"][$i]["rate"];
+			$From = $outData[$jur]["bracket"][$i]["from"];
+			if ($i > 0) $revTaxPaid = $outData[$jur]["bracket"][$i-1]["maxTotalTaxPaid"];
+			break;
+		}
+	}
+	/*
 	for ($i = 0; $i < count($outData[$jur]["bracket"])-1; $i++) {
 		if ($amt > $outData[$jur]["bracket"][$i]["topNet"]) {
 			// It's at least the next tax bracket
@@ -395,6 +405,7 @@ function calcReverse ($amt, $jur) {
 			break;
 		}
 	}
+	*/
 
 	$gross = ($amt + $revTaxPaid - ($revRate * $From))/(1-$revRate);
 
