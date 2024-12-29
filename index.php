@@ -76,7 +76,19 @@ if (isset($uri[3])) {
 
 	if ($prov) {
 		if ($logging) print "Going to combine brackets for provice $prov.<br>\n";
-		combineBrackets($prov);
+		//combineBrackets($prov);
+		$combined = combineBrackets1($outData["canada"]["bracket"], $outData[$prov]["bracket"]);
+		if ($logging) {
+			var_dump($combined);
+			print "<br>\nAnd now seeing if it's ontario.<br>\n";
+		}
+		if ($prov == "on") {
+			$combined = combineBrackets1($outData[$prov]["ohp"], $combined, $logging);
+			if ($logging) {
+				var_dump($combined);
+			}
+		}
+		$outData["combined"]["bracket"] = $combined;
 		if ($logging) print "Going to calculate tops for $prov.<br>\n";
 		calcTops ($prov);
 		if ($logging) print "Going to calculate tops for combined.<br>\n";
@@ -336,6 +348,7 @@ function calcTaxes ($amt, $jur, $logging=false) {
 	$mtr = 0;
 	$avgTR = 0;
 	$looking = true;
+	$prem = null;
 	//$logging = true;
 	for ($i = count($outData[$jur]["bracket"])-1; $i>=0; $i--) {
 		if ($amt > $outData[$jur]["bracket"][$i]["from"]) {
@@ -347,6 +360,9 @@ function calcTaxes ($amt, $jur, $logging=false) {
 				$taxPaid = $amt * $outData[$jur]["bracket"][$i]["rate"];
 			} else {
 				$taxPaid = $outData[$jur]["bracket"][$i-1]["maxTotalTaxPaid"] + ($outData[$jur]["bracket"][$i]["rate"] * ($amt - ($outData[$jur]["bracket"][$i]["from"] + 0.01)));
+			}
+			if (isset($outData[$jur]["bracket"][$i]["premium"])) {
+				$prem = $outData[$jur]["bracket"][$i]["premium"];
 			}
 			break;
 		}
@@ -373,6 +389,7 @@ function calcTaxes ($amt, $jur, $logging=false) {
 	$outData[$jur]["taxPaid"] = round($taxPaid, 4);
 	$outData[$jur]["marginalRate"] = round($mtr, 5);
 	$outData[$jur]["averageRate"] = round($taxPaid/$amt, 5);
+	if ($prem) $outData[$jur]["premium"] = $prem;
 
 	$bpar = min($outData[$jur]["bpa"]*$outData[$jur]["bracket"][0]["rate"], $taxPaid);
 	$outData[$jur]["bpaRefund"] = $bpar;
@@ -484,6 +501,90 @@ function combineBrackets ($prov) {
 	$outData["combined"]["bracket"] = $combo;
 
 } // End of combineBrackets
+
+function combineBrackets1 ($b1, $b2, $logging=false) {
+	global $outData;
+
+	if($logging) print "b1 has " . count($b1) . " and b2 has " . count($b2) . " brackets.<br>\n";
+	$combo = array();
+
+	$looking = true;
+	$looking1 = true;
+	$looking2 = true;
+
+	$b1Idx = 0;
+	$b2Idx = 0;
+	$failsafe = 0;
+
+	$b1Rate = $b1[$b1Idx]["rate"];
+	$b2Rate = $b2[$b2Idx]["rate"];
+
+	$from = 0;
+	$rt = $b1Rate + $b2Rate;
+	$prem = null;
+	$hasPrem = false;
+
+	array_push($combo, array("rate"=>$rt, "from"=>$from));
+	if (isset($b1[0]["premium"]) || isset($b2[0]["premium"])) {
+		$prem = 0;
+		$hasPrem=true;
+		if (isset($b1[$b1Idx]["premium"])) $prem += $b1[$b1Idx]["premium"];
+		if (isset($b2[$b2Idx]["premium"])) $prem += $b2[$b2Idx]["premium"];
+		$combo[0]["premium"] = $prem;
+	}
+	if ($logging) print "Starting....<br>\n";
+	do {
+		if ($looking1 && $looking2) {
+			if ($logging) {
+				print "b1Idx: $b1Idx, b2Idx: $b2Idx.<Br>\n";
+				print "b1 From: " . $b1[$b1Idx+1]["from"] . ".<br>\n";
+				print "b2 From: " . $b2[$b2Idx+1]["from"] . ".<br>\n";
+			}
+			if ($b1[$b1Idx+1]["from"] < $b2[$b2Idx+1]["from"]) {
+				$b1Idx++;
+				$from = $b1[$b1Idx]["from"];
+				$b1Rate = $b1[$b1Idx]["rate"];
+				if (isset($b1[$b1Idx]["premium"])) $prem = $b1[$b1Idx]["premium"];
+				if ($b1Idx+1 == count($b1)) {
+					$looking1 = false;
+				}
+			} else {
+				$b2Idx++;
+				$from = $b2[$b2Idx]["from"];
+				$b2Rate = $b2[$b2Idx]["rate"];
+				if (isset($b2[$b2Idx]["premium"])) $prem = $b2[$b2Idx]["premium"];
+				if ($b2Idx+1 == count($b2)) {
+					$looking2 = false;
+				}
+			}
+		} else {
+			if ($looking1) {
+				$b1Idx++;
+				$from = $b1[$b1Idx]["from"];
+				$b1Rate = $b1[$b1Idx]["rate"];
+				if (isset($b1[$b1Idx]["premium"])) $prem = $b1[$b1Idx]["premium"];
+				if ($b1Idx+1 == count($b1)) $looking1 = false;
+			} else {
+				$b2Idx++;
+				$from = $b2[$b2Idx]["from"];
+				$b2Rate = $b2[$b2Idx]["rate"];
+				if (isset($b2[$b2Idx]["premium"])) $prem = $b2[$b2Idx]["premium"];
+				if ($b2Idx+1 == count($b2)) $looking2 = false;
+			}
+		}
+		$rt = $b1Rate + $b2Rate;
+		$thisOne = Array("rate"=>round($rt, 5), "from"=>round($from, 4));
+		if ($hasPrem) $thisOne["premium"] = $prem;
+		array_push($combo, $thisOne);
+		if ($b1Idx > count($b1) && $b2Idx > count($b2)) $looking = false;
+		if ($looking1 == false && $looking2 == false) $looking = false;
+		$failsafe++;
+		if ($failsafe > 30) $looking = false;
+	} while ($looking);
+
+	return $combo;
+
+} // End of combineBrackets1
 
 function calcTops ($jur) {
 	global $outData;

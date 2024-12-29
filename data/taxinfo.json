@@ -415,46 +415,57 @@
 		"ohp" : [
 			{
 				"from" : 0,
+				"rate" : 0,
 				"premium" : 0
 			},
 			{
 				"from" : 20000,
-				"premium" : 0.06
+				"rate" : 0.06,
+				"premium" : 0
 			},
 			{
 				"from" : 25000,
+				"rate" : 0,
 				"premium" : 300
 			},
 			{
 				"from" : 36000,
-				"premium" : 0.06
+				"rate" : 0.06,
+				"premium" : 300
 			},
 			{
 				"from" : 38500,
+				"rate" : 0,
 				"premium" : 450
 			},
 			{
 				"from" : 48000,
-				"premium" : 0.25
+				"rate" : 0.25,
+				"premium" : 450
 			},
 			{
 				"from" : 48600,
+				"rate" : 0,
 				"premium" : 600
 			},
 			{
 				"from" : 72000,
-				"premium" : 0.25
+				"rate" : 0.25,
+				"premium" : 600
 			},
 			{
 				"from" : 72600,
+				"rate" : 0,
 				"premium" : 750
 			},
 			{
 				"from" : 200000,
-				"premium" : 0.25
+				"rate" : 0.25,
+				"premium" : 750
 			},
 			{
 				"from" : 200600,
+				"rate" : 0,
 				"premium" : 900
 			}
 		]
