@@ -19,10 +19,10 @@ if ($logging)print "uri: " . var_dump($uri) . ".<br>\n";
 $action = "nothing";
 $outData = array("version"=>$version); //$taxInfo;
 $errData = null;
+$prov = null;
 if (isset($uri[3])) {
 	$amt = null;
 	$year = date("Y");
-	$prov = null;
 	
 	for ($i = 2; $i < count($uri); $i++) {
 		if ($logging) print "Checking " . $uri[$i] . ".<Br>\n";
@@ -72,26 +72,31 @@ if (isset($uri[3])) {
 	$res = null;
 	if ($logging) print "Going to calculate for year: $year, province: $prov, and amount: $amt.<br>\n";
 	if ($logging) print "Going to calculate tops for Canada.<br>\n";
+
+	$outData["canada"]["maxBPARefund"] = round($outData["canada"]["bpa"] * $outData["canada"]["bracket"][0]["rate"], 4);
 	calcTops ("canada");
 
 	if ($prov) {
-		if ($logging) print "Going to combine brackets for provice $prov.<br>\n";
-		//combineBrackets($prov);
-		$combined = combineBrackets1($outData["canada"]["bracket"], $outData[$prov]["bracket"]);
-		if ($logging) {
-			var_dump($combined);
-			print "<br>\nAnd now seeing if it's ontario.<br>\n";
-		}
+		$outData[$prov]["maxBPARefund"] = round($outData[$prov]["bpa"] * $outData[$prov]["bracket"][0]["rate"], 4);
 		if ($prov == "on") {
-			$combined = combineBrackets1($outData[$prov]["ohp"], $combined, $logging);
+			if ($logging) print "Going to combine Ontario tax brackets with OHP.<Br>\n";
+			$combined = combineBrackets($outData[$prov]["ohp"], $outData[$prov]["bracket"], $logging);
 			if ($logging) {
 				var_dump($combined);
 			}
+			$outData[$prov]["bracket"] = $combined;
+		}
+		if ($logging) print "Going to combine brackets for provice $prov.<br>\n";
+		$combined = combineBrackets($outData["canada"]["bracket"], $outData[$prov]["bracket"]);
+		if ($logging) {
+			var_dump($combined);
+			print "<br>\nAnd now seeing if it's ontario.<br>\n";
 		}
 		$outData["combined"]["bracket"] = $combined;
 		if ($logging) print "Going to calculate tops for $prov.<br>\n";
 		calcTops ($prov);
 		if ($logging) print "Going to calculate tops for combined.<br>\n";
+		$outData["combined"]["maxBPARefund"] = $outData["canada"]["maxBPARefund"] + $outData[$prov]["maxBPARefund"];
 		calcTops ("combined");
 	}
 	if ($logging) print "Done calculating tops.  Now to calculate amounts.<br>\n";
@@ -258,8 +263,10 @@ function calculate($amt, $prov=null, $logging=false) {
 	calcTaxes($amt, "canada", $logging);
 	// Provincial
 	if ($prov) {
-		//if ($prov == "on") calcOHP ($amt, $logging);
+		if ($prov == "on") $outData[$prov]["OHPremium"] = calcOHPFromGross ($amt, $logging);
 		calcTaxes($amt, $prov, $logging);
+
+		calcTaxes($amt, "combined", $logging);
 	}
 
 	$ttaxPaid = $outData["canada"]["taxPaid"];
@@ -272,17 +279,19 @@ function calculate($amt, $prov=null, $logging=false) {
 	}
 	$outData["results"] = array();
 	$outData["results"]["gross"] = round($amt, 2);
-	$outData["results"]["net"] = round($amt - $ttaxPaid, 4);
-	$outData["results"]["taxPaid"] = round($ttaxPaid, 4);
-	$outData["results"]["marginalRate"] = round($ttr, 5);
-	$outData["results"]["averageRate"] = round($ttaxPaid / $amt, 5);
-	$outData["results"]["bpaRefund"] = round($tbpar, 4);
-	$outData["results"]["netWithBPARefund"] = round($amt - $ttaxPaid + $tbpar, 4);
+	$outData["results"]["net"] = $outData["combined"]["net"];
+
+	if (isset($outData["combined"]["premium"])) $outData ["results"]["premium"] = $outData["combined"]["premium"];
+	$outData["results"]["subtotalTaxPaid"] = $outData["combined"]["subtotalTaxPaid"];
+	$outData["results"]["marginalRate"] = $outData["combined"]["marginalRate"];
+	$outData["results"]["averageRate"] = $outData["combined"]["averageRate"];
+	$outData["results"]["bpaRefund"] = $outData["combined"]["bpaRefund"];
+	$outData["results"]["taxPaid"] = $outData["combined"]["taxPaid"];
 
 
 	// Canada
-	$outData["canada"]["net"] = round($amt - $outData["canada"]["taxPaid"], 4);
-	$outData["canada"]["netWithBPARefund"] = round($amt - $outData["canada"]["taxPaid"] + $outData["canada"]["bpaRefund"], 4);
+	//$outData["canada"]["net"] = round($amt - $outData["canada"]["taxPaid"], 4);
+	//$outData["canada"]["netWithBPARefund"] = round($amt - $outData["canada"]["taxPaid"] + $outData["canada"]["bpaRefund"], 4);
 	$gross = calcReverse($amt, "canada");
 	$outData["canada"]["reverse"]["net"] = round($amt,2);
 	$outData["canada"]["reverse"]["gross"] = round($gross, 4);
@@ -298,8 +307,8 @@ function calculate($amt, $prov=null, $logging=false) {
 
 	if ($prov) {
 		// Prov
-		$outData[$prov]["net"] = round($amt - $outData[$prov]["taxPaid"], 4);
-		$outData[$prov]["netWithBPARefund"] = round($amt - $outData[$prov]["taxPaid"] + $outData[$prov]["bpaRefund"], 4);
+		//$outData[$prov]["net"] = round($amt - $outData[$prov]["taxPaid"], 4);
+		//$outData[$prov]["netWithBPARefund"] = round($amt - $outData[$prov]["taxPaid"] + $outData[$prov]["bpaRefund"], 4);
 		$gross = calcReverse($amt, $prov);
 		$outData[$prov]["reverse"]["net"] = round($amt, 2);
 		$outData[$prov]["reverse"]["gross"] = round($gross, 4);
@@ -349,6 +358,9 @@ function calcTaxes ($amt, $jur, $logging=false) {
 	$avgTR = 0;
 	$looking = true;
 	$prem = null;
+	$prevTaxPaid = 0;
+	$marginalTaxes = 0;
+	$bpar = 0;
 	//$logging = true;
 	for ($i = count($outData[$jur]["bracket"])-1; $i>=0; $i--) {
 		if ($amt > $outData[$jur]["bracket"][$i]["from"]) {
@@ -358,48 +370,53 @@ function calcTaxes ($amt, $jur, $logging=false) {
 			$mtr = $outData[$jur]["bracket"][$i]["rate"];
 			if ($i == 0) {
 				$taxPaid = $amt * $outData[$jur]["bracket"][$i]["rate"];
+				$marginalTaxes = $taxPaid;
 			} else {
-				$taxPaid = $outData[$jur]["bracket"][$i-1]["maxTotalTaxPaid"] + ($outData[$jur]["bracket"][$i]["rate"] * ($amt - ($outData[$jur]["bracket"][$i]["from"] + 0.01)));
+				$marginalTaxes = ($outData[$jur]["bracket"][$i]["rate"] * ($amt - ($outData[$jur]["bracket"][$i]["from"] + 0.01)));
+				$prevTaxPaid = $outData[$jur]["bracket"][$i-1]["maxTotalTaxPaid"];
+				$taxPaid = $marginalTaxes + $prevTaxPaid;
 			}
+			$subTotalTaxPaid = $taxPaid;
 			if (isset($outData[$jur]["bracket"][$i]["premium"])) {
 				$prem = $outData[$jur]["bracket"][$i]["premium"];
+				$subTotalTaxPaid += $prem;
 			}
 			break;
 		}
 	}
-	/*
-	for ($i = 0; $i < count($outData[$jur]["bracket"])-1; $i++) {
-		if ($amt > $outData[$jur]["bracket"][$i+1]["from"]) {
-			// it's at least the next tax bracket.
-		} else {
-			// it's this one
-			if ($logging) print "In tax bracket $i.<Br>\n";
-			$bracket = $i+1;
-			$mtr = $outData[$jur]["bracket"][$i]["rate"];
-			if ($i == 0) {
-				$taxPaid = $amt * $outData[$jur]["bracket"][$i]["rate"];
-			} else {
-				$taxPaid = $outData[$jur]["bracket"][$i-1]["maxTotalTaxPaid"] + ($outData[$jur]["bracket"][$i]["rate"] * ($amt - ($outData[$jur]["bracket"][$i]["from"] + 0.01)));
-			}
-			break;
-		}
-	}
-	*/
+	
 	$outData[$jur]["taxBracket"] = $bracket;
-	$outData[$jur]["taxPaid"] = round($taxPaid, 4);
-	$outData[$jur]["marginalRate"] = round($mtr, 5);
-	$outData[$jur]["averageRate"] = round($taxPaid/$amt, 5);
+	$outData[$jur]["marginalTaxes"] = round($marginalTaxes, 4);
+	$outData[$jur]["nonMarginalTaxes"] = $prevTaxPaid;
 	if ($prem) $outData[$jur]["premium"] = $prem;
+	$outData[$jur]["subtotalTaxPaid"] = round($subTotalTaxPaid, 4);
+	$outData[$jur]["subtotalTaxPaid"] = round($subTotalTaxPaid, 4);
+	$outData[$jur]["marginalRate"] = round($mtr, 5);
+	$outData[$jur]["subtotalAverageRate"] = round($subTotalTaxPaid/$amt, 5);
+	$outData[$jur]["subtotalNet"] = round($amt - $subTotalTaxPaid, 4);
 
-	$bpar = min($outData[$jur]["bpa"]*$outData[$jur]["bracket"][0]["rate"], $taxPaid);
+	if ($jur == "combined") {
+		global $prov;
+		$bpar = ($outData["canada"]["bpaRefund"] + $outData[$prov]["bpaRefund"]);
+	} else {
+		$bpar = min($outData[$jur]["bpa"]*$outData[$jur]["bracket"][0]["rate"], $taxPaid);
+	}
 	$outData[$jur]["bpaRefund"] = $bpar;
+	
+	
+	$taxPaid = $subTotalTaxPaid - $bpar;
+	$outData[$jur]["net"] = round($amt - $taxPaid, 4);
+	$outData[$jur]["taxPaid"] = round($taxPaid, 4);
+	$outData[$jur]["averageRate"] = round($taxPaid/$amt, 5);
+	
+
 
 } // End of calcTaxes
 
 
 function calcReverse ($amt, $jur) {
 	global $outData;
-	$revTaxPaid = 0;
+	$prevTaxPaid = 0;
 	$revRate = 0;
 	$From = 0;
 	for ($i = count($outData[$jur]["bracket"])-1; $i>=0; $i--) {
@@ -407,102 +424,18 @@ function calcReverse ($amt, $jur) {
 			// it's the one
 			$revRate = $outData[$jur]["bracket"][$i]["rate"];
 			$From = $outData[$jur]["bracket"][$i]["from"];
-			if ($i > 0) $revTaxPaid = $outData[$jur]["bracket"][$i-1]["maxTotalTaxPaid"];
+			if ($i > 0) $prevTaxPaid = $outData[$jur]["bracket"][$i-1]["maxTotalTaxPaid"];
 			break;
 		}
 	}
-	/*
-	for ($i = 0; $i < count($outData[$jur]["bracket"])-1; $i++) {
-		if ($amt > $outData[$jur]["bracket"][$i]["topNet"]) {
-			// It's at least the next tax bracket
-			$revTaxPaid = $revTaxPaid + $outData[$jur]["bracket"][$i]["maxTaxPaid"];
-		} else {
-			$revRate = $outData[$jur]["bracket"][$i]["rate"];
-			$From = $outData[$jur]["bracket"][$i]["from"];
-			break;
-		}
-	}
-	*/
 
-	$gross = ($amt + $revTaxPaid - ($revRate * $From))/(1-$revRate);
+	$gross = ($amt + $prevTaxPaid - ($revRate * $From))/(1-$revRate);
 
 	return $gross;
 
 } // End of calcReverse
 
-function combineBrackets ($prov) {
-	global $outData;
-
-	$combo =array();
-	$f = 0;
-	$p = 0;
-	$looking = true;
-	$lookingF = true;
-	$lookingP = true;
-	//$rt = $outData["canada"]["bracket"][$f]["rate"] + $outData[$prov]["bracket"][$p];
-
-	$frate = $outData["canada"]["bracket"][$f]["rate"];
-	$prate = $outData[$prov]["bracket"][$p]["rate"];
-	$rt = $frate + $prate;
-	$from = 0;
-	$failsafe = 0;
-	array_push($combo, array("rate"=>$rt, "from"=>$from));
-	do {
-		
-		if ($lookingP && $lookingF) {
-			if ($outData["canada"]["bracket"][$f+1]["from"] < $outData[$prov]["bracket"][$p+1]["from"]) {
-				$f++;
-				$from = $outData["canada"]["bracket"][$f]["from"];
-				$frate = $outData["canada"]["bracket"][$f]["rate"];
-				if ($f+1 == count($outData["canada"]["bracket"])) {
-					$lookingF = false;
-				}
-			} else {
-				$p++;
-				$from = $outData[$prov]["bracket"][$p]["from"];
-				$prate = $outData[$prov]["bracket"][$p]["rate"];
-				//} else {
-				if ($p+1 == count($outData[$prov]["bracket"])) {
-					//print "Setting lookingP to false";
-					$lookingP = false;
-				}
-			}
-		} else {
-			if ($lookingP) {
-				// $lookingF must be false.  So you've hit the top fTaxbracket
-				$p++;
-				$from = $outData[$prov]["bracket"][$p]["from"];
-				$prate = $outData[$prov]["bracket"][$p]["rate"];
-				if ($p+1 == count($outData[$prov]["bracket"])) {
-					$lookingP = false;
-				}
-			} else {
-				if ($lookingF) {
-					// $lookingP must be false.  So you've hit the top pTaxBracket
-					$f++;
-					$from = $outData["canada"]["bracket"][$f]["from"];
-					$frate = $outData["canada"]["bracket"][$f]["rate"];
-					//} else {
-					if ($f+1 == count($outData["canada"]["bracket"])) {
-						$lookingF = false;
-					}
-				}
-			}
-		}
-		$rt = $frate + $prate;
-		array_push($combo, array("rate"=>round($rt, 5), "from"=>round($from, 4)));
-		
-		if ($f >= count($outData["canada"]["bracket"]) && $p >= count($outData[$prov]["bracket"])) $looking = false;
-		if ($lookingP == false && $lookingF == false) $looking = false;
-		$failsafe++;
-		if ($failsafe > 20) $looking = false;
-	} while ($looking);
-
-	$outData["combined"]["bracket"] = $combo;
-
-} // End of combineBrackets
-
-function combineBrackets1 ($b1, $b2, $logging=false) {
+function combineBrackets ($b1, $b2, $logging=false) {
 	global $outData;
 
 	if($logging) print "b1 has " . count($b1) . " and b2 has " . count($b2) . " brackets.<br>\n";
@@ -584,30 +517,54 @@ function combineBrackets1 ($b1, $b2, $logging=false) {
 
 	return $combo;
 
-} // End of combineBrackets1
+} // End of combineBrackets
 
 function calcTops ($jur) {
 	global $outData;
 
 	$maxTotalTaxPaid = 0;
 	for ($i = 0; $i < count($outData[$jur]["bracket"])-1; $i++) {
+		// Calculate maximum taxes in _this_ bracket ((next floor - this floor) * rate)
 		$maxTaxPaid = ($outData[$jur]["bracket"][$i+1]["from"] - $outData[$jur]["bracket"][$i]["from"] + 0.01) * $outData[$jur]["bracket"][$i]["rate"];
+		// Record that amount in the "copybook".  Hey, shuddup; I'm a COBOL programemr by day.
 		$outData[$jur]["bracket"][$i]["maxTaxPaid"] = round($maxTaxPaid, 4);
+		// Add that amount to the current maxTotalTaxPaid.
 		$maxTotalTaxPaid = $maxTotalTaxPaid + $maxTaxPaid;
+		// Record that in the "copybook"
 		$outData[$jur]["bracket"][$i]["maxTotalTaxPaid"] = round($maxTotalTaxPaid, 4);
-		$outData[$jur]["bracket"][$i]["topNet"] = round($outData[$jur]["bracket"][$i+1]["from"] - $maxTotalTaxPaid, 4);
-		if ($jur != "combined") $outData[$jur]["maxBPARefund"] = $outData[$jur]["bpa"] * $outData[$jur]["bracket"][0]["rate"];
+
+
+		// Oh no.  I think this is wrong.  You really should incorporate BPA and refund amounts.
+		// So, it's the floor of the next bracket minus totalTaxPaid + BPARefund - premium, if there is one
+		// First of all, do we have BPARefund right now?
+		// Second of all, do we know the premium now?
+		$topNet = $outData[$jur]["bracket"][$i+1]["from"] - $maxTotalTaxPaid + min($outData[$jur]["maxBPARefund"], $maxTotalTaxPaid);
+		if (isset($outData[$jur]["bracket"][$i]["premium"])) $topNet = $topNet - $outData[$jur]["bracket"][$i]["premium"];
+		$outData[$jur]["bracket"][$i]["topNet"] = round($topNet, 4);
+
 	}
 
 } // End of calcTops
 
-function calcOHP ($amt, $logging) {
+function calcOHPFromGross ($amt, $logging) {
 	global $outData;
 
 	$prem = 0;
+	$rate = 0;
+	$tprem = 0;
 	$looking = true;
 
-	for ($i = 0; $i < count($outData["on"]["ohp"]) -1 && $looking; $i++) {
+	for ($i = count($outData["on"]["ohp"])-1; $i>=0; $i--) {
+
+		if ($amt > $outData["on"]["ohp"][$i]["from"]) {
+			$prem = $outData["on"]["ohp"][$i]["premium"];
+			$rate = $outData["on"]["ohp"][$i]["rate"];
+			$tprem = ($amt - $outData["on"]["ohp"][$i]["from"] * $rate) + $prem;
+			break;
+
+		}
+
+/*
 		if ($outData["on"]["ohp"][$i]["premium"] > 1) $prem = $outData["on"]["ohp"][$i]["premium"];
 		if ($amt > $outData["on"]["ohp"][$i+1]["from"]) {
 		} else {
@@ -620,16 +577,12 @@ function calcOHP ($amt, $logging) {
 			}
 			$looking = false;
 		}
+		*/
 	}
 
-	//for (
+	return $prem;
 
-	$outData["on"]["OHPPremium"] = $prem;
-	$outData["combined"]["OHPPremium"] = $prem;
-
-	
-
-} // End of calcOHP
+} // End of calcOHPFromGross
 
 ?>
 
