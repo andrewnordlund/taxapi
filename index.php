@@ -155,14 +155,16 @@ function calculate($amt, $prov=null, $logging=false) {
 	}
 	$outData["results"] = array();
 	$outData["results"]["gross"] = round($amt, 2);
-	$outData["results"]["net"] = $outData["combined"]["net"];
 
-	if (isset($outData["combined"]["premium"])) $outData ["results"]["premium"] = $outData["combined"]["premium"];
-	$outData["results"]["subtotalTaxPaid"] = $outData["combined"]["subtotalTaxPaid"];
-	$outData["results"]["marginalRate"] = $outData["combined"]["marginalRate"];
-	$outData["results"]["averageRate"] = $outData["combined"]["averageRate"];
-	$outData["results"]["bpaRefund"] = $outData["combined"]["bpaRefund"];
-	$outData["results"]["taxPaid"] = $outData["combined"]["taxPaid"];
+	$orig = ($prov ? "combined" : "canada");
+	$outData["results"]["net"] = $outData[$orig]["net"];
+
+	if (isset($outData["combined"]["premium"])) $outData ["results"]["premium"] = $outData[$orig]["premium"];
+	$outData["results"]["subtotalTaxPaid"] = $outData[$orig]["subtotalTaxPaid"];
+	$outData["results"]["marginalRate"] = $outData[$orig]["marginalRate"];
+	$outData["results"]["averageRate"] = $outData[$orig]["averageRate"];
+	$outData["results"]["bpaRefund"] = $outData[$orig]["bpaRefund"];
+	$outData["results"]["taxPaid"] = $outData[$orig]["taxPaid"];
 
 
 	// Canada
