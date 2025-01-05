@@ -2,7 +2,8 @@
 // All this from https://code.tutsplus.com/how-to-build-a-simple-rest-api-in-php--cms-37000t
 require __DIR__ . "/inc/bootstrap.php";
 $logging=!true;
-$version = "1.0.1";
+$version = "2.0.1";
+$dateModified = "2025-01-05";
 
 $uri = parse_url($_SERVER['REQUEST_URI']); //, PHP_URL_PATH);
 
@@ -17,7 +18,7 @@ if ($logging)print "uri: " . var_dump($uri) . ".<br>\n";
 
  */
 $action = "nothing";
-$outData = array("version"=>$version); //$taxInfo;
+$outData = array("version"=>$version, "dateModified"=>$dateModified); //$taxInfo;
 $errData = null;
 $prov = null;
 $year = date("Y");
@@ -114,6 +115,8 @@ if (isset($uri[3])) {
 	
 	if ($amt) {
 		calculate($amt, $prov, $logging);
+
+		calculatePaycheques ($logging);
 	} else {
 		if ($logging) print "Not calculating amounts because \$amt is $amt.<br>\n";
 	}
@@ -121,7 +124,7 @@ if (isset($uri[3])) {
 //if ((isset($uri[3]) && $uri[3] != 'user') || !isset($uri[4])) {
 } else {
 	if ($logging) print "Gonna show about page instead.<br>\n";
-	print getAboutPage();
+	$outData = getAboutPage();
 }
 require PROJECT_ROOT_PATH . "/Controller/API/UserController.php";
 
@@ -165,6 +168,8 @@ function calculate($amt, $prov=null, $logging=false) {
 	$outData["results"]["averageRate"] = $outData[$orig]["averageRate"];
 	$outData["results"]["bpaRefund"] = $outData[$orig]["bpaRefund"];
 	$outData["results"]["taxPaid"] = $outData[$orig]["taxPaid"];
+	$outData["results"]["upe1"] = min ($outData["results"]["gross"], $outData["canada"]["cpp"]["ympe"]);
+	$outData["results"]["upe2"] = min (max($outData["results"]["gross"] - $outData["canada"]["cpp"]["ympe"], 0), $outData["canada"]["cpp"]["yampe"] - $outData["canada"]["cpp"]["ympe"]);
 
 
 	// Canada
@@ -228,6 +233,8 @@ function calculate($amt, $prov=null, $logging=false) {
 		//$outData["results"]["reverse"]["includingBPA"]["gross"] = $outData["canada"]["reverse"]["includingBPA"]["gross"];
 		//$outData["results"]["reverse"]["includingBPA"]["taxPaid"] = $outData["canada"]["reverse"]["includingBPA"]["taxPaid"];
 	}
+	$outData["results"]["reverse"]["upe1"] = min ($outData["results"]["reverse"]["gross"], $outData["canada"]["cpp"]["ympe"]);
+	$outData["results"]["reverse"]["upe2"] = min (max($outData["results"]["reverse"]["gross"] - $outData["canada"]["cpp"]["ympe"], 0), $outData["canada"]["cpp"]["yampe"] - $outData["canada"]["cpp"]["ympe"]);
 
 } // End of calculate
 
@@ -306,7 +313,7 @@ function calcReverse ($amt, $jur) {
 		if ($i == 0) {
 			$revRate = $outData[$jur]["bracket"][$i]["rate"];
 			$From = $outData[$jur]["bracket"][$i]["from"];
-			$prevTaxPaid = $outData[$jur]["bracket"][$i-1]["maxTotalTaxPaid"];
+			$prevTaxPaid = 0;
 			if (isset($outData[$jur]["bracket"][$i]["premium"])) $prem = $outData[$jur]["bracket"][$i]["premium"];
 		} else {
 			if ($amt > $outData[$jur]["bracket"][$i-1]["topNet"]) {
@@ -430,10 +437,6 @@ function calcTops ($jur) {
 		$outData[$jur]["bracket"][$i]["maxTotalTaxPaid"] = round($maxTotalTaxPaid, 4);
 
 
-		// Oh no.  I think this is wrong.  You really should incorporate BPA and refund amounts.
-		// So, it's the floor of the next bracket minus totalTaxPaid + BPARefund - premium, if there is one
-		// First of all, do we have BPARefund right now?
-		// Second of all, do we know the premium now?
 		$topNet = $outData[$jur]["bracket"][$i+1]["from"] - $maxTotalTaxPaid + min($outData[$jur]["maxBPARefund"], $maxTotalTaxPaid);
 		if (isset($outData[$jur]["bracket"][$i]["premium"])) $topNet = $topNet - $outData[$jur]["bracket"][$i]["premium"];
 		$outData[$jur]["bracket"][$i]["topNet"] = round($topNet, 4);
@@ -480,8 +483,28 @@ function calcOHPFromGross ($amt, $logging) {
 
 } // End of calcOHPFromGross
 
+function calculatePaycheques ($logging=false) {
+	global $outData;
+
+	$freq = array("monthly"=>12, "twiceMonthly"=>24, "fortnightly"=>26, "weekly"=>52);
+	$amt = array("gross", "net", "taxPaid");
+
+	$outData["results"]["paychequeAmounts"] = array();
+	$outData["results"]["reverse"]["paychequeAmounts"] = array();
+
+	foreach ($freq AS $k=>$v) {
+		$outData["results"]["paychequeAmounts"][$k] = Array();
+		for ($i = 0; $i < count($amt); $i++) {
+			$outData["results"]["paychequeAmounts"][$k][$amt[$i]] = round($outData["results"][$amt[$i]]/$v, 4);
+			$outData["results"]["reverse"]["paychequeAmounts"][$k][$amt[$i]] = round($outData["results"]["reverse"][$amt[$i]]/$v, 4);
+		}
+	}
+
+
+} // End of calculatePaycheques
 
 function getAboutPage() {
+	global $version, $dateModified;
 	$outData = "<!DOCTYPE html>
 <html lang=\"en\">
 	<head>
@@ -502,12 +525,13 @@ function getAboutPage() {
 	$outData .= "\t\t<main>\n";
 	$outData .= "\n\t\t\t<div class=\"container\">\n\t\t\t\t<div class=\"row\">\t\t\t<p>The Nordburg Tax API allows you to get Canadian income tax data estimates in JSON so you can see information about tax brakets, marginal and average tax rates, etc.</p>\n";
 	$outData .= "\t\t\t<h3>Disclaimer</h3>\n";
-	$outData .= "\t\t\t<p>I built this/am building this to learn to make a RESTful API.  It is <em>extremely</em> proof-of-concept.  I'm not 100% clear on how the Basic Personal Amount works, so that part may be <em>way</em> off. Please do not use for anything important!</p>\n";
+	$outData .= "\t\t\t<p>I built this/am building this to learn to make a RESTful API.  It is <em>extremely</em> proof-of-concept.  I'm not 100% clear on how the Basic Personal Amount works, so that part may be <em>way</em> off. Furthermore, Quebec seems to have unique rules that I don't know. Please do not use for anything important! </p>\n";
 	$outData .= "\t\t\t<h2>Usage</h2>\n";
-	$outData .= "\t\t\t<p>To use this, you need to provide a year (2024 or later), a province code, and a dollar amount.  Example: <code>/taxapi/index.php/2024/on/40000</code> will give you information about income taxes in Ontario for $40&nbsp;000.00 in 2024.  The information it gives includes:</p>\n";
+	$outData .= "\t\t\t<p>To use this, you need to provide a year (2024 or later), a province code, and a dollar amount.  Example: <code>/taxapi/2024/on/40000</code> will give you information about income taxes in Ontario for $40&nbsp;000.00 in 2024.  The information it gives includes:</p>\n";
 	$outData .= "\t\t\t<ul class=\"ms-4\">\n";
 	$outData .= "\t\t\t\t<li>All tax brackets for Canada</li>\n";
 	$outData .= "\t\t\t\t<li>All tax brackets for Ontario</li>\n";
+	$outData .= "\t\t\t\t<li>Ontario Health Premium brackets.</li>\n";
 	$outData .= "\t\t\t\t<li>Tax paid in each bracket up to the marginal bracket</li>\n";
 	$outData .= "\t\t\t\t<li>Total tax paid</li>\n";
 	$outData .= "\t\t\t\t<li>Marginal tax rate</li>\n";
@@ -515,8 +539,9 @@ function getAboutPage() {
 	$outData .= "\t\t\t\t<li>Basic Personal Amount</li>\n";
 	$outData .= "\t\t\t\t<li>The net amount</li>\n";
 	$outData .= "\t\t\t\t<li>Assuming that the amount provided is the net amount, it calculates what the required gross amount would be.</li>\n";
+	$outData .= "\t\t\t\t<li>Gross, net, and taxes per paycheque (monthly, twice monthly, bi-weekly/fortnightly, weekly)</li>\n";
 	$outData .= "\t\t\t</ul>\n";
-	$outData .= "\t\t\t<p>See it in action: <a href=\"/taxapi/index.php/2024/on/40000\">/taxapi/index.php/2024/on/40000</a>.</p>\n";
+	$outData .= "\t\t\t<p>See it in action: <a href=\"/taxapi/2024/on/40000\">/taxapi/2024/on/40000</a>.</p>\n";
 	$outData .= "\t\t\t<details class=\" border border-primary rounded\">\n";
 	$outData .= "\t\t\t<summary class=\"text-decoration-underline\" style=\"color: blue\">JSON Output</summary>\n";
 	$outData .= "\t\t\t\t<div class=\"mt-3\">\n";
@@ -547,27 +572,54 @@ function getAboutPage() {
 			{
 				\"from\":0,
 				\"rate\":0.0505,
-				\"maxTaxPaid\":2598.0235,
-				\"maxTotalTaxPaid\":2598.0235,
-				\"topNet\":48847.9765},
-			}
+				\"premium\" : 0,
+				\"maxTaxPaid\":1010.0005,
+				\"maxTotalTaxPaid\":1010.0005,
+				\"topNet\":19616.149},
+			},
+			{
+				\"from\":20000,
+				\"rate\":0.1105,
+				\"premium\" : 0,
+				\"maxTaxPaid\":552.5011,
+				\"maxTotalTaxPaid\":1562.5016,
+				\"topNet\":24063.6479},
+			},
+
 	...
 	}
 	\"results\":{
 		\"gross\":40000,
-		\"net\":31980,
-		\"taxPaid\":8020,
+		\"net\":34061.8923,
+		\"premium\":450,
+		\"subtotalTaxPaid\":8920.0072,
 		\"marginalRate\":0.2005,
-		\"averageRate\":0.2005,
+		\"averageRate\":0.14845,
 		\"bpaRefund\":2981.8995,
-		\"netWithBPARefund\":34961.8995,
+		\"taxPaid\":5938.1077,
+		\"upe1\":40000,
+		\"upe2\":0,
+		\"paychequeAmounts\":{
+			\"monthly\": {
+				\"gross\":3333.3333,
+				\"net\":2838.491,
+				\"taxPaid\":494.8423
+			}
+			...
+		}
 		\"reverse\":{
-			\"gross\":50031.2695,
-			\"taxPaid\":10031.2695,
-			\"includingBPA\":{
-				\"net\":37018.1005,
-				\"gross\":46301.5641,
-				\"taxPaid\":9283.4636
+			\"net\":40000,
+			\"gross\":47427.2792,
+			\"taxPaid\":7427.2792,
+			\"upe1\":47427.2792,
+			\"upe2\":0,
+			\"paychequeAmounts\":{
+				\"monthly\": {
+					\"gross\":3952.2733,
+					\"net\":3333.3333,
+					\"taxPaid\":618.9399
+				}
+				...
 			}
 		}
 	}
@@ -598,6 +650,7 @@ function getAboutPage() {
 	$outData .= "\t\t</div></div></main>\n";
 	$outData .= "\t\t<footer class=\"small border-top\">\n";
 	$outData .= "\n\t\t\t<div class=\"container\">\n\t\t\t\t<div class=\"row\">\t\t<h2 class=\"visually-hidden\">Footer</h2>\n";
+	$outData .= "<dl><dt>Version:</dt><dd>$version</dd><dt>Last Modified:</dt><dd>$dateModified</dd></dl>";
 	$outData .= "\t\t<ol>\n";
 	$outData .= "\t\t\t<li><a href=\"https://github.com/andrewnordlund/taxapi/\">GitHub Repo</a></li>\n";
 	$outData .= "\t\t\t<li>Find an something wrong?  Missing feature? <a href=\"https://github.com/andrewnordlund/taxapi/issues\">Submit an Issue</a>.</li>\n";
