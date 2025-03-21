@@ -5,7 +5,7 @@ $logging=!true;
 $version = "2.0.1";
 $dateModified = "2025-01-05";
 
-ini_set('serialize_precision', 5);
+ini_set('serialize_precision', 1);
 
 $uri = parse_url($_SERVER['REQUEST_URI']); //, PHP_URL_PATH);
 
