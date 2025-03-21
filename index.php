@@ -168,8 +168,9 @@ function calculate($amt, $prov=null, $logging=false) {
 	$outData["results"]["averageRate"] = $outData[$orig]["averageRate"];
 	$outData["results"]["bpaRefund"] = $outData[$orig]["bpaRefund"];
 	$outData["results"]["taxPaid"] = $outData[$orig]["taxPaid"];
-	$outData["results"]["upe1"] = min ($outData["results"]["gross"], $outData["canada"]["cpp"]["ympe"]);
-	$outData["results"]["upe2"] = min (max($outData["results"]["gross"] - $outData["canada"]["cpp"]["ympe"], 0), $outData["canada"]["cpp"]["yampe"] - $outData["canada"]["cpp"]["ympe"]);
+	$outData["results"]["cpp"] = Array();
+	$outData["results"]["cpp"]["upe1"] = min ($outData["results"]["gross"], $outData["canada"]["cpp"]["ympe"]);
+	$outData["results"]["cpp"]["upe2"] = min (max($outData["results"]["gross"] - $outData["canada"]["cpp"]["ympe"], 0), $outData["canada"]["cpp"]["yampe"] - $outData["canada"]["cpp"]["ympe"]);
 
 
 	// Canada
@@ -233,8 +234,9 @@ function calculate($amt, $prov=null, $logging=false) {
 		//$outData["results"]["reverse"]["includingBPA"]["gross"] = $outData["canada"]["reverse"]["includingBPA"]["gross"];
 		//$outData["results"]["reverse"]["includingBPA"]["taxPaid"] = $outData["canada"]["reverse"]["includingBPA"]["taxPaid"];
 	}
-	$outData["results"]["reverse"]["upe1"] = min ($outData["results"]["reverse"]["gross"], $outData["canada"]["cpp"]["ympe"]);
-	$outData["results"]["reverse"]["upe2"] = min (max($outData["results"]["reverse"]["gross"] - $outData["canada"]["cpp"]["ympe"], 0), $outData["canada"]["cpp"]["yampe"] - $outData["canada"]["cpp"]["ympe"]);
+	$outData["results"]["reverse"]["cpp"] = array();
+	$outData["results"]["reverse"]["cpp"]["upe1"] = min ($outData["results"]["reverse"]["gross"], $outData["canada"]["cpp"]["ympe"]);
+	$outData["results"]["reverse"]["cpp"]["upe2"] = min (max($outData["results"]["reverse"]["gross"] - $outData["canada"]["cpp"]["ympe"], 0), $outData["canada"]["cpp"]["yampe"] - $outData["canada"]["cpp"]["ympe"]);
 
 } // End of calculate
 
@@ -337,6 +339,27 @@ function calcReverse ($amt, $jur) {
 	return $gross;
 
 } // End of calcReverse
+
+function calcCPPBenefits ($amt, $logging=false) {
+	global $outData;
+	$monthsBase = 468;
+	$monthsEnhanced = 480;
+	$ybe = 3500;
+	$year = $outData["canada"]["year"];
+
+	if ($amt > $ybe) {
+		$ape1ratio = max($outData["results"]["upe1"] / $outData["canada"][$year]["cpp"]["ympe"], 1);
+		$ape1 = $ape1ratio * $outData["canada"][$year]["cpp"]["aympe"];
+		$outData["results"]["cpp"] = array();
+		$outData["results"]["cpp"]["baseBenefit"] = ($ap1 / $monthsBase) * 0.25000;
+		$outData["results"]["cpp"]["firstBenefit"] = ($ap1 / $monthsEnhanced) * 0.08333;
+		// Gotta figure out exactly how 2nd Additional is calculated
+	} else {
+	}
+
+} // End of calcCPPBenefits
+
+
 
 function combineBrackets ($b1, $b2, $logging=false) {
 	global $outData;
