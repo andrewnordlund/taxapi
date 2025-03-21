@@ -5,6 +5,8 @@ $logging=!true;
 $version = "2.0.1";
 $dateModified = "2025-01-05";
 
+ini_set('serialize_precision', 5);
+
 $uri = parse_url($_SERVER['REQUEST_URI']); //, PHP_URL_PATH);
 
 //$uri = explode( '/', $uri );
