@@ -5,6 +5,8 @@ $logging=!true;
 $version = "2.0.2";
 $dateModified = "2025-03-21";
 
+// Don't forget to get updated CPI numbers from https://www.bankofcanada.ca/rates/price-indexes/cpi/
+
 ini_set('serialize_precision', -1);
 ini_set('precision', -1);
 
