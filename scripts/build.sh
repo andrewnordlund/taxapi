@@ -25,7 +25,8 @@ if [ -e "$HOME/.gitignore" ]; then
   cp -R src/* build/
 fi
 # delete unnecessary files			
-cp -r build/ dist/
+#cp -r build/ dist/
+ rsync -rlpcgoDv --exclude-from="$HOME/.gitignore" build dist/
 ls -Rl
 
 if [ "$cleanUp" == "true" ]; then
