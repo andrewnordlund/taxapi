@@ -27,12 +27,13 @@ fi
 # delete unnecessary files			
 #cp -r build/ dist/
 # rsync -rlpcgoDv --exclude-from="$HOME/.gitignore" build/ dist
-#ls -Rl
 if [ -e "$HOME/.gitignore" ]; then
   rsync -rlpcgoDv --exclude-from="$HOME/.gitignore" build/ dist
 else
-  cp -Ra build/. dist/
+#cp -a build/. dist/
+  rsync -rlpcgoDv build/ dist
 fi
+ls -Rl
 
 if [ "$cleanUp" == "true" ]; then
   rm -Rf build
