@@ -4,8 +4,9 @@ pwd
 cleanUp="true"
 
 if [ $# -gt 0 ]; then
-  if [ $1 == "false"]; then
+  if [ $1 == "false" ]; then
     cleanUp="false"
+	echo "Cleanup is false"
   fi 
 fi
 
@@ -17,8 +18,11 @@ if [ -d build ]; then
 fi
 
 mkdir dist build
-cp -R src/* build/
-cp -R build/* dist/
+#cp -R src/* build/
+#rsync -av --exclude="*.swp" --exclude=".DS_Store" src/ build
+rsync -rlpcgoDv --exclude-from="$HOME/.gitignore" src/ build
+# delete unnecessary files			
+cp -r build/ dist/
 #ls -Rl
 
 if [ "$cleanUp" == "true" ]; then

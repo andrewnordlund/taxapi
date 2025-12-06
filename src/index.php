@@ -2,8 +2,8 @@
 // All this from https://code.tutsplus.com/how-to-build-a-simple-rest-api-in-php--cms-37000t
 require __DIR__ . "/inc/bootstrap.php";
 $logging=!true;
-$version = "2.0.2";
-$dateModified = "2025-03-21";
+$version = "2.1.0";
+$dateModified = "2025-12-06";
 
 // Don't forget to get updated CPI numbers from https://www.bankofcanada.ca/rates/price-indexes/cpi/
 
@@ -23,113 +23,102 @@ if ($logging)print "uri: " . var_dump($uri) . ".<br>\n";
 
  */
 $action = "nothing";
-$outData = array("version"=>$version, "dateModified"=>$dateModified); //$taxInfo;
+$outData = array();
 $errData = null;
 $prov = null;
 $year = date("Y");
-if (isset($uri[3])) {
-	$amt = null;
-	
-	for ($i = 2; $i < count($uri); $i++) {
-		if ($logging) print "Checking " . $uri[$i] . ".<Br>\n";
-		if (preg_match("/^20[1-2]\d$/", $uri[$i])) {
-			if (array_key_exists($uri[$i], $taxInfo["canada"])) {
-				$year = $uri[$i];
-				//break;
-			}
-	//	}
-	//}
 
-	//for ($i = 3; $i < count($uri); $i++) {
-		} elseif (preg_match("/^\w{2,3}$/", $uri[$i])) {
-			//print "Could be a province: " . $uri[$i] . "<br>\n";
-			if (array_key_exists($uri[$i], $taxInfo)) {
-				$prov = $uri[$i];
-				if ($logging) print "It's a province: $prov.<br>\n";
-				//break;
-			}
-		} elseif (preg_match("/^\\$?([\d,]+(\.\d\d?\d?\d?)?)$/", $uri[$i], $amnt)) {
-			$amt = str_replace(",", "", $amnt[1]);
-			if ($logging) print "Setting \$amt to $amt.<br>\n";
-		} elseif (preg_match("/^amt=(\d+(\.\d\d?\d?\?)?)/i", $uri[$i], $amnt)) {
-			$amt = $amnt[1];
-		}
-	}
-	$outData["canada"] = $taxInfo["canada"][$year];
-	$outData["canada"]["year"] = $year;
-	//if (strtolower($uri[3]) == "on") {
-	//}
-	if ($prov) {
-		$outData[$prov] = array();
-		$pyear = $year;
-		if (array_key_exists($year, $taxInfo[$prov])) {
-			$outData[$prov] = $taxInfo[$prov][$year];
-		} elseif (in_array(date("Y"), $taxInfo[$prov])) {
-			$outData[$prov] = $taxInfo[$prov][date("Y")];
-			$pyear = date("Y");
-		} else {
-			$pyear = array_key_first($taxInfo[$prov]);
-			$outData[$prov] = $taxInfo[$prov][$pyear];
-			
-		}
-		$outData[$prov]["year"] = $pyear;
-		if ($prov == "on") $outData[$prov]["ohp"] = $taxInfo[$prov]["ohp"];
-		$outData["combined"] = array();
-	}
-	
-	$res = null;
-	if ($logging) print "Going to calculate for year: $year, province: $prov, and amount: $amt.<br>\n";
-	if ($logging) print "Going to calculate tops for Canada.<br>\n";
+$inputs = discernInputs($uri, $logging);
+$amt = $inputs["amt"];
+if ($inputs["year"] != null) $year = $inputs["year"];
+if ($inputs["prov"] != null) $prov = $inputs["prov"];
 
-	$outData["canada"]["maxBPARefund"] = round($outData["canada"]["bpa"] * $outData["canada"]["bracket"][0]["rate"], 4);
-	$outData["canada"]["reverse"] = array();
-	$outData["canada"]["reverse"]["bpaRefund"] = min(($amt * $outData["canada"]["bracket"][0]["rate"])/(1-$outData["canada"]["bracket"][0]["rate"]), $outData["canada"]["maxBPARefund"]);
-	calcTops ("canada");
-
-	if ($prov) {
-		$outData[$prov]["maxBPARefund"] = round($outData[$prov]["bpa"] * $outData[$prov]["bracket"][0]["rate"], 4);
-		$outData[$prov]["reverse"] = array();
-		$outData[$prov]["reverse"]["bpaRefund"] = min(($amt * $outData[$prov]["bracket"][0]["rate"])/(1-$outData[$prov]["bracket"][0]["rate"]), $outData[$prov]["maxBPARefund"]);
-
-		// We have to do this here before we sully the provincial numbers with possible OPH numbers
-		$outData["combined"]["maxBPARefund"] = $outData["canada"]["maxBPARefund"] + $outData[$prov]["maxBPARefund"];
-		$outData["combined"]["reverse"] = array();
-		$outData["combined"]["reverse"]["bpaRefund"] = min(min(($amt * $outData["canada"]["bracket"][0]["rate"])/(1-$outData["canada"]["bracket"][0]["rate"]), $outData["canada"]["maxBPARefund"]) + min(($amt * $outData[$prov]["bracket"][0]["rate"])/(1-$outData[$prov]["bracket"][0]["rate"]), $outData[$prov]["maxBPARefund"]), $outData["combined"]["maxBPARefund"]);
-
-		if ($prov == "on") {
-			if ($logging) print "Going to combine Ontario tax brackets with OHP.<Br>\n";
-			$combined = combineBrackets($outData[$prov]["ohp"], $outData[$prov]["bracket"], $logging);
-			if ($logging) {
-				var_dump($combined);
-			}
-			$outData[$prov]["bracket"] = $combined;
-		}
-		if ($logging) print "Going to combine brackets for provice $prov.<br>\n";
-		$combined = combineBrackets($outData["canada"]["bracket"], $outData[$prov]["bracket"]);
-		if ($logging) {
-			var_dump($combined);
-			print "<br>\nAnd now seeing if it's ontario.<br>\n";
-		}
-		$outData["combined"]["bracket"] = $combined;
-		if ($logging) print "Going to calculate tops for $prov.<br>\n";
-		calcTops ($prov);
-		if ($logging) print "Going to calculate tops for combined.<br>\n";
-		calcTops ("combined");
-	}
-	if ($logging) print "Done calculating tops.  Now to calculate amounts.<br>\n";
-	
-	if ($amt) {
-		calculate($amt, $prov, $logging);
-
-		calculatePaycheques ($logging);
-	} else {
-		if ($logging) print "Not calculating amounts because \$amt is $amt.<br>\n";
-	}
-
-//if ((isset($uri[3]) && $uri[3] != 'user') || !isset($uri[4])) {
-} else {
+if ($logging) print "Got year: $year, province: $prov, amount: $amt.<Br>\n";
+if (!$inputs["year"] && !$prov && !$amt) {
 	if ($logging) print "Gonna show about page instead.<br>\n";
 	$outData = getAboutPage();
+} else {
+	if ($year) {
+		$outData["canada"] = $taxInfo["canada"][$year];
+		$outData["canada"]["year"] = $year;
+		
+		if ($prov) {
+			$outData[$prov] = array();
+			$pyear = $year;
+			if (array_key_exists($year, $taxInfo[$prov])) {
+				$outData[$prov] = $taxInfo[$prov][$year];
+			} elseif (in_array(date("Y"), $taxInfo[$prov])) {
+				$outData[$prov] = $taxInfo[$prov][date("Y")];
+				$pyear = date("Y");
+			} else {
+				$pyear = array_key_first($taxInfo[$prov]);
+				$outData[$prov] = $taxInfo[$prov][$pyear];
+			}
+			$outData[$prov]["year"] = $pyear;
+			if ($prov == "on") $outData[$prov]["ohp"] = $taxInfo[$prov]["ohp"];
+			$outData["combined"] = array();
+		}
+	
+		$res = null;
+		if ($logging && $amt ) print "Going to calculate for year: $year, province: $prov, and amount: $amt.<br>\n";
+		if ($logging) print "Going to calculate tops for Canada.<br>\n";
+
+		$outData["canada"]["maxBPARefund"] = round($outData["canada"]["bpa"] * $outData["canada"]["bracket"][0]["rate"], 4);
+		if ($amt) {
+			$outData["canada"]["reverse"] = array();
+			$outData["canada"]["reverse"]["bpaRefund"] = min(($amt * $outData["canada"]["bracket"][0]["rate"])/(1-$outData["canada"]["bracket"][0]["rate"]), $outData["canada"]["maxBPARefund"]);
+		}
+		calcTops ("canada");
+
+		if ($prov) {
+			$outData[$prov]["maxBPARefund"] = round($outData[$prov]["bpa"] * $outData[$prov]["bracket"][0]["rate"], 4);
+			if ($amt) {
+				$outData[$prov]["reverse"] = array();
+				$outData[$prov]["reverse"]["bpaRefund"] = min(($amt * $outData[$prov]["bracket"][0]["rate"])/(1-$outData[$prov]["bracket"][0]["rate"]), $outData[$prov]["maxBPARefund"]);
+			}
+			// We have to do this here before we sully the provincial numbers with possible OPH numbers
+			$outData["combined"]["maxBPARefund"] = $outData["canada"]["maxBPARefund"] + $outData[$prov]["maxBPARefund"];
+			if ($amt) {
+				$outData["combined"]["reverse"] = array();
+				$outData["combined"]["reverse"]["bpaRefund"] = min(min(($amt * $outData["canada"]["bracket"][0]["rate"])/(1-$outData["canada"]["bracket"][0]["rate"]), $outData["canada"]["maxBPARefund"]) + min(($amt * $outData[$prov]["bracket"][0]["rate"])/(1-$outData[$prov]["bracket"][0]["rate"]), $outData[$prov]["maxBPARefund"]), $outData["combined"]["maxBPARefund"]);
+			}
+
+			if ($prov == "on") {
+				if ($logging) print "Going to combine Ontario tax brackets with OHP.<Br>\n";
+				$combined = combineBrackets($outData[$prov]["ohp"], $outData[$prov]["bracket"], $logging);
+				if ($logging) {
+					var_dump($combined);
+				}
+				$outData[$prov]["bracket"] = $combined;
+			}
+			if ($logging) print "Going to combine brackets for provice $prov.<br>\n";
+			$combined = combineBrackets($outData["canada"]["bracket"], $outData[$prov]["bracket"]);
+			if ($logging) {
+				var_dump($combined);
+				print "<br>\nAnd now seeing if it's ontario.<br>\n";
+			}
+			$outData["combined"]["bracket"] = $combined;
+			if ($logging) print "Going to calculate tops for $prov.<br>\n";
+			calcTops ($prov);
+			if ($logging) print "Going to calculate tops for combined.<br>\n";
+			calcTops ("combined");
+		}
+		if ($logging) print "Done calculating tops.  Now to calculate amounts.<br>\n";
+	
+		if ($amt) {
+			calculate($amt, $prov, $logging);
+
+			calculatePaycheques ($logging);
+		} else {
+			if ($logging) print "Not calculating amounts because \$amt is $amt.<br>\n";
+		}
+		$outData["app"] = Array("version"=>$version, "dateModified"=>$dateModified);
+		$outData["jsonFile"] = Array("version"=>$taxInfo["version"], "dateModified"=>$taxInfo["dateModified"]);
+
+	} else {
+		if ($logging) print "Gonna show about page instead.<br>\n";
+		$outData = getAboutPage();
+	}
 }
 require PROJECT_ROOT_PATH . "/Controller/API/UserController.php";
 
@@ -696,5 +685,34 @@ function getAboutPage() {
 
 } // End of getAboutPage
 
-?>
+function discernInputs($uri, $logging=false) {
+	global $taxInfo;
+	$inputs = Array("prov" => null, "year" => null, "amt" => null);
 
+	for ($i = 1; $i < count($uri); $i++) {
+		if ($logging) print "Checking " . $uri[$i] . ".<Br>\n";
+		if (preg_match("/^20[1-2]\d$/", $uri[$i])) {
+			if (array_key_exists($uri[$i], $taxInfo["canada"])) {
+				$inputs["year"] = $uri[$i];
+				if ($logging) print "It's a year: " . $inputs['year'] . ".<br>\n";
+				//break;
+			}
+		} elseif (preg_match("/^\w{2,3}$/", $uri[$i])) {
+			//print "Could be a province: " . $uri[$i] . "<br>\n";
+			if (array_key_exists($uri[$i], $taxInfo)) {
+				$inputs["prov"] = $uri[$i];
+				if ($logging) print "It's a province: " . $inputs['prov'] . ".<br>\n";
+				//break;
+			}
+		} elseif (preg_match("/^\\$?([\d,]+(\.\d\d?\d?\d?)?)$/", $uri[$i], $amnt)) {
+			$inputs["amt"] = str_replace(",", "", $amnt[1]);
+			if ($logging) print "Setting \$amt to $amt.<br>\n";
+		} elseif (preg_match("/^amt=(\d+(\.\d\d?\d?\?)?)/i", $uri[$i], $amnt)) {
+			$inputs["amt"] = $amnt[1];
+		}
+	}
+
+	return $inputs;
+} // End of discernInputs
+
+?>
