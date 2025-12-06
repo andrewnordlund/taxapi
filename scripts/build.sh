@@ -21,13 +21,18 @@ mkdir dist build
 #rsync -av --exclude="*.swp" --exclude=".DS_Store" src/ build
 if [ -e "$HOME/.gitignore" ]; then
   rsync -rlpcgoDv --exclude-from="$HOME/.gitignore" src/ build
-  else
-  cp -R src/* build/
+else
+  cp -Ra src/* build/
 fi
 # delete unnecessary files			
 #cp -r build/ dist/
- rsync -rlpcgoDv --exclude-from="$HOME/.gitignore" build/ dist
-ls -Rl
+# rsync -rlpcgoDv --exclude-from="$HOME/.gitignore" build/ dist
+#ls -Rl
+if [ -e "$HOME/.gitignore" ]; then
+  rsync -rlpcgoDv --exclude-from="$HOME/.gitignore" build/ dist
+else
+  cp -Ra build/. dist/
+fi
 
 if [ "$cleanUp" == "true" ]; then
   rm -Rf build
