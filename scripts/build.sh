@@ -2,8 +2,9 @@ echo "You're currently working in:"
 pwd
 
 cleanUp="true"
-
+echo "************************************"
 echo "Starting out, it looks like...."
+echo "************************************"
 ls -Rl
 
 if [ $# -gt 0 ]; then
@@ -23,28 +24,36 @@ if [ -d build ]; then
   echo "build"
 fi
 
+echo "************************************"
 echo "mkdir dist build..."
+echo "************************************"
 mkdir dist build
 #rsync -av --exclude="*.swp" --exclude=".DS_Store" src/ build
+echo "************************************"
 echo "Moving src to build"
+echo "************************************"
 if [ -e "$HOME/.gitignore" ]; then
-  rsync -rlpcgoDv --exclude-from="$HOME/.gitignore" src/ build
+  rsync -ralpcgoDv --exclude-from="$HOME/.gitignore" src/ build
 else
-  rsync -rlpcgoDv src/ build
+  rsync -ralpcgoDv src/ build
 #cp -Ra src/* build/
 fi
+echo "************************************"
 echo "Moving build to dist"
+echo "************************************"
 # delete unnecessary files			
 #cp -r build/ dist/
 # rsync -rlpcgoDv --exclude-from="$HOME/.gitignore" build/ dist
 if [ -e "$HOME/.gitignore" ]; then
-  rsync -rlpcgoDv --exclude-from="$HOME/.gitignore" build/ dist
+  rsync -ralpcgoDv --exclude-from="$HOME/.gitignore" build/ dist
 else
 #cp -a build/. dist/
-  rsync -rlpcgoDv build/ dist
+  rsync -ralpcgoDv build/ dist
 fi
+echo "************************************"
 echo "And now it looks like...."
-ls -Rl
+echo "************************************"
+ls -Ral
 
 if [ "$cleanUp" == "true" ]; then
   rm -Rf build
