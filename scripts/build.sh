@@ -22,7 +22,8 @@ mkdir dist build
 if [ -e "$HOME/.gitignore" ]; then
   rsync -rlpcgoDv --exclude-from="$HOME/.gitignore" src/ build
 else
-  cp -Ra src/* build/
+  rsync -rlpcgoDv src/ build
+#cp -Ra src/* build/
 fi
 # delete unnecessary files			
 #cp -r build/ dist/
