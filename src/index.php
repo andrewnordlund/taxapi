@@ -11,10 +11,11 @@ ini_set('serialize_precision', -1);
 ini_set('precision', -1);
 
 $uri = parse_url($_SERVER['REQUEST_URI']); //, PHP_URL_PATH);
+if ($logging) print "uri: " . var_dump($uri) . ".<br>\n";
 
 //$uri = explode( '/', $uri );
 $uri = explode('/', trim($uri['path'], '/'));
-if ($logging)print "uri: " . var_dump($uri) . ".<br>\n";
+if ($logging) print "uri: " . var_dump($uri) . ".<br>\n";
 //print_r($uri);
 /* 
    taxapi/{prov}/info?amn=12345
@@ -25,6 +26,7 @@ if ($logging)print "uri: " . var_dump($uri) . ".<br>\n";
 $action = "nothing";
 $outData = array();
 $errData = null;
+$provs = Array();
 $prov = null;
 $year = date("Y");
 
@@ -42,21 +44,23 @@ if (!$inputs["year"] && !$prov && !$amt) {
 		$outData["canada"] = $taxInfo["canada"][$year];
 		$outData["canada"]["year"] = $year;
 		
-		if ($prov) {
-			$outData[$prov] = array();
+//		if ($prov) {
+		for ($i = 0 ; $i < count($provs); $i++) {
+			if ($logging) print "Doing province " . $provs[$i] . ".<br>\n";
+			$outData[$provs[$i]] = array();
 			$pyear = $year;
-			if (array_key_exists($year, $taxInfo[$prov])) {
-				$outData[$prov] = $taxInfo[$prov][$year];
-			} elseif (in_array(date("Y"), $taxInfo[$prov])) {
-				$outData[$prov] = $taxInfo[$prov][date("Y")];
+			if (array_key_exists($year, $taxInfo["provinces"][$provs[$i]])) {
+				$outData[$provs[$i]] = $taxInfo["provinces"][$provs[$i]][$year];
+			} elseif (in_array(date("Y"), $taxInfo["provinces"][$provs[$i]])) {
+				$outData[$provs[$i]] = $taxInfo["provinces"][$provs[$i]][date("Y")];
 				$pyear = date("Y");
 			} else {
-				$pyear = array_key_first($taxInfo[$prov]);
-				$outData[$prov] = $taxInfo[$prov][$pyear];
+				$pyear = array_key_first($taxInfo["provinces"][$provs[$i]]);
+				$outData[$provs[$i]] = $taxInfo["provinces"][$provs[$i]][$pyear];
 			}
-			$outData[$prov]["year"] = $pyear;
-			if ($prov == "on") $outData[$prov]["ohp"] = $taxInfo[$prov]["ohp"];
-			$outData["combined"] = array();
+			$outData[$provs[$i]]["year"] = $pyear;
+			if ($provs[$i] == "on") $outData[$provs[$i]]["ohp"] = $taxInfo["provinces"][$provs[$i]]["ohp"];
+			$outData[$provs[$i]]["combined"] = array();
 		}
 	
 		$res = null;
@@ -68,46 +72,53 @@ if (!$inputs["year"] && !$prov && !$amt) {
 			$outData["canada"]["reverse"] = array();
 			$outData["canada"]["reverse"]["bpaRefund"] = min(($amt * $outData["canada"]["bracket"][0]["rate"])/(1-$outData["canada"]["bracket"][0]["rate"]), $outData["canada"]["maxBPARefund"]);
 		}
-		calcTops ("canada");
+//		calcTops ("canada");
+		calcTops($outData["canada"]);
 
-		if ($prov) {
-			$outData[$prov]["maxBPARefund"] = round($outData[$prov]["bpa"] * $outData[$prov]["bracket"][0]["rate"], 4);
+//		if ($prov) {
+		for ($i = 0 ; $i < count($provs); $i++) {
+
+			$outData[$provs[$i]]["maxBPARefund"] = round($outData[$provs[$i]]["bpa"] * $outData[$provs[$i]]["bracket"][0]["rate"], 4);
 			if ($amt) {
-				$outData[$prov]["reverse"] = array();
-				$outData[$prov]["reverse"]["bpaRefund"] = min(($amt * $outData[$prov]["bracket"][0]["rate"])/(1-$outData[$prov]["bracket"][0]["rate"]), $outData[$prov]["maxBPARefund"]);
+				$outData[$provs[$i]]["reverse"] = array();
+				$outData[$provs[$i]]["reverse"]["bpaRefund"] = min(($amt * $outData[$provs[$i]]["bracket"][0]["rate"])/(1-$outData[$provs[$i]]["bracket"][0]["rate"]), $outData[$provs[$i]]["maxBPARefund"]);
 			}
 			// We have to do this here before we sully the provincial numbers with possible OPH numbers
-			$outData["combined"]["maxBPARefund"] = $outData["canada"]["maxBPARefund"] + $outData[$prov]["maxBPARefund"];
+			$outData[$provs[$i]]["combined"]["maxBPARefund"] = $outData["canada"]["maxBPARefund"] + $outData[$provs[$i]]["maxBPARefund"];
 			if ($amt) {
-				$outData["combined"]["reverse"] = array();
-				$outData["combined"]["reverse"]["bpaRefund"] = min(min(($amt * $outData["canada"]["bracket"][0]["rate"])/(1-$outData["canada"]["bracket"][0]["rate"]), $outData["canada"]["maxBPARefund"]) + min(($amt * $outData[$prov]["bracket"][0]["rate"])/(1-$outData[$prov]["bracket"][0]["rate"]), $outData[$prov]["maxBPARefund"]), $outData["combined"]["maxBPARefund"]);
+				$outData[$provs[$i]]["combined"]["reverse"] = array();
+				$outData[$provs[$i]]["combined"]["reverse"]["bpaRefund"] = min(min(($amt * $outData["canada"]["bracket"][0]["rate"])/(1-$outData["canada"]["bracket"][0]["rate"]), $outData["canada"]["maxBPARefund"]) + min(($amt * $outData[$provs[$i]]["bracket"][0]["rate"])/(1-$outData[$provs[$i]]["bracket"][0]["rate"]), $outData[$provs[$i]]["maxBPARefund"]), $outData["combined"]["maxBPARefund"]);
 			}
 
-			if ($prov == "on") {
+			if ($provs[$i] == "on") {
 				if ($logging) print "Going to combine Ontario tax brackets with OHP.<Br>\n";
-				$combined = combineBrackets($outData[$prov]["ohp"], $outData[$prov]["bracket"], $logging);
+				$combined = combineBrackets($outData[$provs[$i]]["ohp"], $outData[$provs[$i]]["bracket"], $logging);
 				if ($logging) {
 					var_dump($combined);
 				}
-				$outData[$prov]["bracket"] = $combined;
+				$outData[$provs[$i]]["bracket"] = $combined;
 			}
-			if ($logging) print "Going to combine brackets for provice $prov.<br>\n";
-			$combined = combineBrackets($outData["canada"]["bracket"], $outData[$prov]["bracket"]);
+			if ($logging) print "Going to combine brackets for provice $provs[$i].<br>\n";
+			$combined = combineBrackets($outData["canada"]["bracket"], $outData[$provs[$i]]["bracket"]);
 			if ($logging) {
 				var_dump($combined);
 				print "<br>\nAnd now seeing if it's ontario.<br>\n";
 			}
-			$outData["combined"]["bracket"] = $combined;
-			if ($logging) print "Going to calculate tops for $prov.<br>\n";
-			calcTops ($prov);
+			$outData[$provs[$i]]["combined"]["bracket"] = $combined;
+			if ($logging) print "Going to calculate tops for $provs[$i].<br>\n";
+			//calcTops ($provs[$i]);
+			calcTops($outData[$provs[$i]]);
 			if ($logging) print "Going to calculate tops for combined.<br>\n";
-			calcTops ("combined");
+			//calcTops ("combined");
+			calcTops($outData[$provs[$i]]["combined"]);
 		}
 		if ($logging) print "Done calculating tops.  Now to calculate amounts.<br>\n";
 	
 		if ($amt) {
-			calculate($amt, $prov, $logging);
+			for ($i = 0 ; $i < count($provs); $i++) {
+				calculate($amt, $provs[$i], $logging);
 
+			}
 			calculatePaycheques ($logging);
 		} else {
 			if ($logging) print "Not calculating amounts because \$amt is $amt.<br>\n";
@@ -156,7 +167,7 @@ function calculate($amt, $prov=null, $logging=false) {
 	$orig = ($prov ? "combined" : "canada");
 	$outData["results"]["net"] = $outData[$orig]["net"];
 
-	if (isset($outData["combined"]["premium"])) $outData ["results"]["premium"] = $outData[$orig]["premium"];
+	if (isset($outData[$prov]["combined"]["premium"])) $outData ["results"]["premium"] = $outData[$orig]["premium"];
 	$outData["results"]["subtotalTaxPaid"] = $outData[$orig]["subtotalTaxPaid"];
 	$outData["results"]["marginalRate"] = $outData[$orig]["marginalRate"];
 	$outData["results"]["averageRate"] = $outData[$orig]["averageRate"];
@@ -202,9 +213,9 @@ function calculate($amt, $prov=null, $logging=false) {
 		
 		// Combined
 		$gross = calcReverse($amt, "combined");
-		$outData["combined"]["reverse"]["net"] = round($amt, 2);
-		$outData["combined"]["reverse"]["gross"] = round($gross, 4);
-		$outData["combined"]["reverse"]["taxPaid"] = round($gross - $amt, 4);
+		$outData[$provs]["combined"]["reverse"]["net"] = round($amt, 2);
+		$outData[$provs]["combined"]["reverse"]["gross"] = round($gross, 4);
+		$outData[$provs]["combined"]["reverse"]["taxPaid"] = round($gross - $amt, 4);
 		$outData["results"]["reverse"]["net"] = round($amt, 2);
 		$outData["results"]["reverse"]["gross"] = round($gross, 4);
 		$outData["results"]["reverse"]["taxPaid"] = round($gross - $amt, 4);
@@ -439,24 +450,24 @@ function combineBrackets ($b1, $b2, $logging=false) {
 
 } // End of combineBrackets
 
-function calcTops ($jur) {
+function calcTops (&$jur) {
 	global $outData;
 
 	$maxTotalTaxPaid = 0;
-	for ($i = 0; $i < count($outData[$jur]["bracket"])-1; $i++) {
+	for ($i = 0; $i < count($jur["bracket"])-1; $i++) {
 		// Calculate maximum taxes in _this_ bracket ((next floor - this floor) * rate)
-		$maxTaxPaid = ($outData[$jur]["bracket"][$i+1]["from"] - $outData[$jur]["bracket"][$i]["from"] + 0.01) * $outData[$jur]["bracket"][$i]["rate"];
+		$maxTaxPaid = ($jur["bracket"][$i+1]["from"] - $jur["bracket"][$i]["from"] + 0.01) * $jur["bracket"][$i]["rate"];
 		// Record that amount in the "copybook".  Hey, shuddup; I'm a COBOL programemr by day.
-		$outData[$jur]["bracket"][$i]["maxTaxPaid"] = round($maxTaxPaid, 4);
+		$jur["bracket"][$i]["maxTaxPaid"] = round($maxTaxPaid, 4);
 		// Add that amount to the current maxTotalTaxPaid.
 		$maxTotalTaxPaid = $maxTotalTaxPaid + $maxTaxPaid;
 		// Record that in the "copybook"
-		$outData[$jur]["bracket"][$i]["maxTotalTaxPaid"] = round($maxTotalTaxPaid, 4);
+		$jur["bracket"][$i]["maxTotalTaxPaid"] = round($maxTotalTaxPaid, 4);
 
 
-		$topNet = $outData[$jur]["bracket"][$i+1]["from"] - $maxTotalTaxPaid + min($outData[$jur]["maxBPARefund"], $maxTotalTaxPaid);
-		if (isset($outData[$jur]["bracket"][$i]["premium"])) $topNet = $topNet - $outData[$jur]["bracket"][$i]["premium"];
-		$outData[$jur]["bracket"][$i]["topNet"] = round($topNet, 4);
+		$topNet = $jur["bracket"][$i+1]["from"] - $maxTotalTaxPaid + min($jur["maxBPARefund"], $maxTotalTaxPaid);
+		if (isset($jur["bracket"][$i]["premium"])) $topNet = $topNet - $jur["bracket"][$i]["premium"];
+		$jur["bracket"][$i]["topNet"] = round($topNet, 4);
 
 	}
 
@@ -686,7 +697,7 @@ function getAboutPage() {
 } // End of getAboutPage
 
 function discernInputs($uri, $logging=false) {
-	global $taxInfo;
+	global $taxInfo, $provs;
 	$inputs = Array("prov" => null, "year" => null, "amt" => null);
 
 	for ($i = 1; $i < count($uri); $i++) {
@@ -698,9 +709,16 @@ function discernInputs($uri, $logging=false) {
 				//break;
 			}
 		} elseif (preg_match("/^\w{2,3}$/", $uri[$i])) {
-			//print "Could be a province: " . $uri[$i] . "<br>\n";
-			if (array_key_exists($uri[$i], $taxInfo)) {
+			if ($logging) print "Could be a province: " . $uri[$i] . "<br>\n";
+			if (preg_match("/^all$/i", $uri[$i])) {
+				$inputs["prov"] = "all";
+				if ($logging) print "Setting provice to " . $inputs["prov"] . ".<br>\n";
+				foreach ($taxInfo["provinces"] AS $p=>$stuff) {
+					array_push($provs, $p);
+				}
+			} elseif (array_key_exists($uri[$i], $taxInfo["provinces"])) {
 				$inputs["prov"] = $uri[$i];
+				array_push($provs, $uri[$i]);
 				if ($logging) print "It's a province: " . $inputs['prov'] . ".<br>\n";
 				//break;
 			}
@@ -716,3 +734,4 @@ function discernInputs($uri, $logging=false) {
 } // End of discernInputs
 
 ?>
+

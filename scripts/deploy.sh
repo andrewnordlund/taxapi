@@ -14,7 +14,7 @@ echo "Moving from $CURRENT_BRANCH to $destination."
 if [ "$destination" == "test" ]; then
   DEST=$WEBBASE"nordburg.ca/taxapi/"
   echo "Going to test.  Moving files from dest to $DEST"
-  rsync -rlpcgoDv --exclude-from="$HOME/.gitignore" --delete dist/ $DEST
+  rsync -rlpcgoDv --exclude-from="$HOME/.gitignore" dist/ $DEST
   #rsync -rlpcgoDv dist/ $DEST
 elif [ "$destination" == "dev" ] || [ "$destination" == "prod" ]; then
   if ! git diff-index --quiet HEAD -- ; then
