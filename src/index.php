@@ -2,8 +2,8 @@
 // All this from https://code.tutsplus.com/how-to-build-a-simple-rest-api-in-php--cms-37000t
 require __DIR__ . "/inc/bootstrap.php";
 $logging=!true;
-$version = "2.1.0";
-$dateModified = "2025-12-06";
+$version = "2.2.0";
+$dateModified = "2026-01-18";
 
 // Don't forget to get updated CPI numbers from https://www.bankofcanada.ca/rates/price-indexes/cpi/
 
@@ -41,7 +41,9 @@ if (!$inputs["year"] && !$prov && !$amt) {
 	$outData = getAboutPage();
 } else {
 	if ($year) {
+		$outData["canada"]  = Array();
 		$outData["canada"] = $taxInfo["canada"][$year];
+		$outData["canada"]["name"] = $taxInfo["canada"]["name"];
 		$outData["canada"]["year"] = $year;
 		
 //		if ($prov) {
@@ -60,7 +62,9 @@ if (!$inputs["year"] && !$prov && !$amt) {
 			}
 			$outData[$provs[$i]]["year"] = $pyear;
 			if ($provs[$i] == "on") $outData[$provs[$i]]["ohp"] = $taxInfo["provinces"][$provs[$i]]["ohp"];
+			$outData[$provs[$i]]["name"] = $taxInfo["provinces"][$provs[$i]]["name"];
 			$outData[$provs[$i]]["combined"] = array();
+			$outData[$provs[$i]]["combined"]["name"] = "combined";
 		}
 	
 		$res = null;
@@ -68,7 +72,7 @@ if (!$inputs["year"] && !$prov && !$amt) {
 		if ($logging) print "Going to calculate tops for Canada.<br>\n";
 
 		$outData["canada"]["maxBPARefund"] = round($outData["canada"]["bpa"] * $outData["canada"]["bracket"][0]["rate"], 4);
-		if ($amt) {
+		if ($amt && count($provs) == 1) {
 			$outData["canada"]["reverse"] = array();
 			$outData["canada"]["reverse"]["bpaRefund"] = min(($amt * $outData["canada"]["bracket"][0]["rate"])/(1-$outData["canada"]["bracket"][0]["rate"]), $outData["canada"]["maxBPARefund"]);
 		}
@@ -79,15 +83,15 @@ if (!$inputs["year"] && !$prov && !$amt) {
 		for ($i = 0 ; $i < count($provs); $i++) {
 
 			$outData[$provs[$i]]["maxBPARefund"] = round($outData[$provs[$i]]["bpa"] * $outData[$provs[$i]]["bracket"][0]["rate"], 4);
-			if ($amt) {
+			if ($amt && count($provs) == 1) {
 				$outData[$provs[$i]]["reverse"] = array();
 				$outData[$provs[$i]]["reverse"]["bpaRefund"] = min(($amt * $outData[$provs[$i]]["bracket"][0]["rate"])/(1-$outData[$provs[$i]]["bracket"][0]["rate"]), $outData[$provs[$i]]["maxBPARefund"]);
 			}
 			// We have to do this here before we sully the provincial numbers with possible OPH numbers
 			$outData[$provs[$i]]["combined"]["maxBPARefund"] = $outData["canada"]["maxBPARefund"] + $outData[$provs[$i]]["maxBPARefund"];
-			if ($amt) {
+			if ($amt && count($provs) == 1) {
 				$outData[$provs[$i]]["combined"]["reverse"] = array();
-				$outData[$provs[$i]]["combined"]["reverse"]["bpaRefund"] = min(min(($amt * $outData["canada"]["bracket"][0]["rate"])/(1-$outData["canada"]["bracket"][0]["rate"]), $outData["canada"]["maxBPARefund"]) + min(($amt * $outData[$provs[$i]]["bracket"][0]["rate"])/(1-$outData[$provs[$i]]["bracket"][0]["rate"]), $outData[$provs[$i]]["maxBPARefund"]), $outData["combined"]["maxBPARefund"]);
+				$outData[$provs[$i]]["combined"]["reverse"]["bpaRefund"] = min(min(($amt * $outData["canada"]["bracket"][0]["rate"])/(1-$outData["canada"]["bracket"][0]["rate"]), $outData["canada"]["maxBPARefund"]) + min(($amt * $outData[$provs[$i]]["bracket"][0]["rate"])/(1-$outData[$provs[$i]]["bracket"][0]["rate"]), $outData[$provs[$i]]["maxBPARefund"]), $outData[$provs[$i]]["combined"]["maxBPARefund"]);
 			}
 
 			if ($provs[$i] == "on") {
@@ -115,11 +119,13 @@ if (!$inputs["year"] && !$prov && !$amt) {
 		if ($logging) print "Done calculating tops.  Now to calculate amounts.<br>\n";
 	
 		if ($amt) {
-			for ($i = 0 ; $i < count($provs); $i++) {
-				calculate($amt, $provs[$i], $logging);
+			//for ($i = 0 ; $i < count($provs); $i++) {
+			//$logging=true;
+			if (count($provs) == 1) {
+				calculate($amt, $provs[0], $logging);
 
+				calculatePaycheques ($logging);
 			}
-			calculatePaycheques ($logging);
 		} else {
 			if ($logging) print "Not calculating amounts because \$amt is $amt.<br>\n";
 		}
@@ -141,22 +147,23 @@ $objFeedController->sendResp();
 
 function calculate($amt, $prov=null, $logging=false) {
 	global $outData;
-
+	//$logging = true;
 	if ($logging) print "Calculating for \$" . $amt . " in $prov.<br>\n";
 	// Federal
-	calcTaxes($amt, "canada", $logging);
+	calcTaxes($amt, $outData["canada"], $logging);
 	// Provincial
 	if ($prov) {
 		if ($prov == "on") $outData[$prov]["OHPremium"] = calcOHPFromGross ($amt, $logging);
-		calcTaxes($amt, $prov, $logging);
+		calcTaxes($amt, $outData[$prov], $logging);
 
-		calcTaxes($amt, "combined", $logging);
+		calcTaxes($amt, $outData[$prov]["combined"], $logging);
 	}
 
 	$ttaxPaid = $outData["canada"]["taxPaid"];
 	$ttr = $outData["canada"]["marginalRate"];
 	$tbpar = $outData["canada"]["bpaRefund"];
 	if ($prov) {
+		if ($logging) print "Adding " .  $outData[$prov]["taxPaid"] . "  to $ttaxPaid.<br>\n";
 		$ttaxPaid += $outData[$prov]["taxPaid"];
 		$ttr += $outData[$prov]["marginalRate"];
 		$tbpar += $outData[$prov]["bpaRefund"];
@@ -164,15 +171,17 @@ function calculate($amt, $prov=null, $logging=false) {
 	$outData["results"] = array();
 	$outData["results"]["gross"] = round($amt, 2);
 
-	$orig = ($prov ? "combined" : "canada");
-	$outData["results"]["net"] = $outData[$orig]["net"];
+	$orig = $outData["canada"];
+	if ($prov) $orig = $outData[$prov]["combined"];
+	//$orig = ($prov ? "combined" : "canada");
+	$outData["results"]["net"] = $outData[$prov]["net"];
 
-	if (isset($outData[$prov]["combined"]["premium"])) $outData ["results"]["premium"] = $outData[$orig]["premium"];
-	$outData["results"]["subtotalTaxPaid"] = $outData[$orig]["subtotalTaxPaid"];
-	$outData["results"]["marginalRate"] = $outData[$orig]["marginalRate"];
-	$outData["results"]["averageRate"] = $outData[$orig]["averageRate"];
-	$outData["results"]["bpaRefund"] = $outData[$orig]["bpaRefund"];
-	$outData["results"]["taxPaid"] = $outData[$orig]["taxPaid"];
+	if (isset($outData[$prov]["combined"]["premium"])) $outData ["results"]["premium"] = $outData[$prov]["premium"];
+	$outData["results"]["subtotalTaxPaid"] = $outData[$prov]["subtotalTaxPaid"];
+	$outData["results"]["marginalRate"] = $outData[$prov]["marginalRate"];
+	$outData["results"]["averageRate"] = $outData[$prov]["averageRate"];
+	$outData["results"]["bpaRefund"] = $outData[$prov]["bpaRefund"];
+	$outData["results"]["taxPaid"] = $outData[$prov]["taxPaid"];
 	$outData["results"]["cpp"] = Array();
 	$outData["results"]["cpp"]["upe1"] = min ($outData["results"]["gross"], $outData["canada"]["cpp"]["ympe"]);
 	$outData["results"]["cpp"]["upe2"] = min (max($outData["results"]["gross"] - $outData["canada"]["cpp"]["ympe"], 0), $outData["canada"]["cpp"]["yampe"] - $outData["canada"]["cpp"]["ympe"]);
@@ -181,7 +190,7 @@ function calculate($amt, $prov=null, $logging=false) {
 	// Canada
 	//$outData["canada"]["net"] = round($amt - $outData["canada"]["taxPaid"], 4);
 	//$outData["canada"]["netWithBPARefund"] = round($amt - $outData["canada"]["taxPaid"] + $outData["canada"]["bpaRefund"], 4);
-	$gross = calcReverse($amt, "canada");
+	$gross = calcReverse($amt, $outData["canada"]);
 	$outData["canada"]["reverse"]["net"] = round($amt,2);
 	$outData["canada"]["reverse"]["gross"] = round($gross, 4);
 	$outData["canada"]["reverse"]["taxPaid"] = round($gross - $amt, 4);
@@ -198,7 +207,7 @@ function calculate($amt, $prov=null, $logging=false) {
 		// Prov
 		//$outData[$prov]["net"] = round($amt - $outData[$prov]["taxPaid"], 4);
 		//$outData[$prov]["netWithBPARefund"] = round($amt - $outData[$prov]["taxPaid"] + $outData[$prov]["bpaRefund"], 4);
-		$gross = calcReverse($amt, $prov);
+		$gross = calcReverse($amt, $outData[$prov]);
 		$outData[$prov]["reverse"]["net"] = round($amt, 2);
 		$outData[$prov]["reverse"]["gross"] = round($gross, 4);
 		$outData[$prov]["reverse"]["taxPaid"] = round($gross - $amt, 4);
@@ -212,10 +221,10 @@ function calculate($amt, $prov=null, $logging=false) {
 
 		
 		// Combined
-		$gross = calcReverse($amt, "combined");
-		$outData[$provs]["combined"]["reverse"]["net"] = round($amt, 2);
-		$outData[$provs]["combined"]["reverse"]["gross"] = round($gross, 4);
-		$outData[$provs]["combined"]["reverse"]["taxPaid"] = round($gross - $amt, 4);
+		$gross = calcReverse($amt, $outData[$prov]["combined"]);
+		$outData[$prov]["combined"]["reverse"]["net"] = round($amt, 2);
+		$outData[$prov]["combined"]["reverse"]["gross"] = round($gross, 4);
+		$outData[$prov]["combined"]["reverse"]["taxPaid"] = round($gross - $amt, 4);
 		$outData["results"]["reverse"]["net"] = round($amt, 2);
 		$outData["results"]["reverse"]["gross"] = round($gross, 4);
 		$outData["results"]["reverse"]["taxPaid"] = round($gross - $amt, 4);
@@ -245,7 +254,7 @@ function calculate($amt, $prov=null, $logging=false) {
 
 } // End of calculate
 
-function calcTaxes ($amt, $jur, $logging=false) {
+function calcTaxes ($amt, &$jur, $logging=false) {
 	global $outData;
 	$taxPaid = 0;
 	$bracket = 0;
@@ -257,85 +266,91 @@ function calcTaxes ($amt, $jur, $logging=false) {
 	$marginalTaxes = 0;
 	$bpar = 0;
 	//$logging = true;
-	for ($i = count($outData[$jur]["bracket"])-1; $i>=0; $i--) {
-		if ($amt > $outData[$jur]["bracket"][$i]["from"]) {
+	for ($i = count($jur["bracket"])-1; $i>=0; $i--) {
+		if ($logging) print "Is $amt > " . $jur["bracket"][$i]["from"] . "?<br>\n"; 
+		if ($amt > $jur["bracket"][$i]["from"]) {
 			// it's the one
 			if ($logging) print "In tax bracket $i.<Br>\n";
 			$bracket = $i+1;
-			$mtr = $outData[$jur]["bracket"][$i]["rate"];
+			$mtr = $jur["bracket"][$i]["rate"];
+			if ($logging) print "In backet: $bracket with a marginal tax rate of $mtr.<br>\n";
 			if ($i == 0) {
-				$taxPaid = $amt * $outData[$jur]["bracket"][$i]["rate"];
+				$taxPaid = $amt * $jur["bracket"][$i]["rate"];
 				$marginalTaxes = $taxPaid;
 			} else {
-				$marginalTaxes = ($outData[$jur]["bracket"][$i]["rate"] * ($amt - ($outData[$jur]["bracket"][$i]["from"] + 0.01)));
-				$prevTaxPaid = $outData[$jur]["bracket"][$i-1]["maxTotalTaxPaid"];
+				$marginalTaxes = ($jur["bracket"][$i]["rate"] * ($amt - ($jur["bracket"][$i]["from"] + 0.01)));
+				$prevTaxPaid = $jur["bracket"][$i-1]["maxTotalTaxPaid"];
 				$taxPaid = $marginalTaxes + $prevTaxPaid;
 			}
 			$subTotalTaxPaid = $taxPaid;
-			if (isset($outData[$jur]["bracket"][$i]["premium"])) {
-				$prem = $outData[$jur]["bracket"][$i]["premium"];
+			if (isset($jur["bracket"][$i]["premium"])) {
+				$prem = $jur["bracket"][$i]["premium"];
 				$subTotalTaxPaid += $prem;
+				if ($logging) print "With a premium of $prem.<br>\n";
 			}
+			if ($logging) print "taxPaid: $taxPaid, marginal taxes: $marginalTaxes.<br>\n";
 			break;
 		}
 	}
 	
-	$outData[$jur]["taxBracket"] = $bracket;
-	$outData[$jur]["marginalTaxes"] = round($marginalTaxes, 4);
-	$outData[$jur]["nonMarginalTaxes"] = $prevTaxPaid;
-	if ($prem) $outData[$jur]["premium"] = $prem;
-	$outData[$jur]["subtotalTaxPaid"] = round($subTotalTaxPaid, 4);
-	$outData[$jur]["subtotalTaxPaid"] = round($subTotalTaxPaid, 4);
-	$outData[$jur]["marginalRate"] = round($mtr, 5);
-	$outData[$jur]["subtotalAverageRate"] = round($subTotalTaxPaid/$amt, 5);
-	$outData[$jur]["subtotalNet"] = round($amt - $subTotalTaxPaid, 4);
+	$jur["taxBracket"] = $bracket;
+	$jur["marginalTaxes"] = round($marginalTaxes, 4);
+	$jur["nonMarginalTaxes"] = $prevTaxPaid;
+	if ($prem) $jur["premium"] = $prem;
+	$jur["subtotalTaxPaid"] = round($subTotalTaxPaid, 4);
+	$jur["subtotalTaxPaid"] = round($subTotalTaxPaid, 4);
+	$jur["marginalRate"] = round($mtr, 5);
+	$jur["subtotalAverageRate"] = round($subTotalTaxPaid/$amt, 5);
+	$jur["subtotalNet"] = round($amt - $subTotalTaxPaid, 4);
 
-	if ($jur == "combined") {
+	if ($logging) print "Doing jur: " . $jur["name"] . ".<br>\n";
+	if ($jur["name"] != "Canada" && !array_key_exists("combined", $jur)) {
 		global $prov;
+		if ($logging) print "In combined!<Br>\n";
 		$bpar = ($outData["canada"]["bpaRefund"] + $outData[$prov]["bpaRefund"]);
 	} else {
-		$bpar = min($outData[$jur]["bpa"]*$outData[$jur]["bracket"][0]["rate"], $taxPaid);
+		$bpar = min($jur["bpa"]*$jur["bracket"][0]["rate"], $taxPaid);
 	}
-	$outData[$jur]["bpaRefund"] = $bpar;
-	
+	$jur["bpaRefund"] = $bpar;
+	if ($jur["name"] == "Canada" && $logging) print "Canada's bpaRefund is: " . $jur["bpaRefund"] . "<br>\n";
 	
 	$taxPaid = $subTotalTaxPaid - $bpar;
-	$outData[$jur]["net"] = round($amt - $taxPaid, 4);
-	$outData[$jur]["taxPaid"] = round($taxPaid, 4);
-	$outData[$jur]["averageRate"] = round($taxPaid/$amt, 5);
+	$jur["net"] = round($amt - $taxPaid, 4);
+	$jur["taxPaid"] = round($taxPaid, 4);
+	$jur["averageRate"] = round($taxPaid/$amt, 5);
 	
 
 
 } // End of calcTaxes
 
 
-function calcReverse ($amt, $jur) {
+function calcReverse ($amt, &$jur) {
 	global $outData;
 	$prevTaxPaid = 0;
 	$revRate = 0;
 	$From = 0;
-	$bpar = $outData[$jur]["reverse"]["bpaRefund"];
+	$bpar = $jur["reverse"]["bpaRefund"];
 	$prem = null;
-	for ($i = count($outData[$jur]["bracket"])-1; $i>=0; $i--) {
+	for ($i = count($jur["bracket"])-1; $i>=0; $i--) {
 		if ($i == 0) {
-			$revRate = $outData[$jur]["bracket"][$i]["rate"];
-			$From = $outData[$jur]["bracket"][$i]["from"];
+			$revRate = $jur["bracket"][$i]["rate"];
+			$From = $jur["bracket"][$i]["from"];
 			$prevTaxPaid = 0;
-			if (isset($outData[$jur]["bracket"][$i]["premium"])) $prem = $outData[$jur]["bracket"][$i]["premium"];
+			if (isset($jur["bracket"][$i]["premium"])) $prem = $jur["bracket"][$i]["premium"];
 		} else {
-			if ($amt > $outData[$jur]["bracket"][$i-1]["topNet"]) {
+			if ($amt > $jur["bracket"][$i-1]["topNet"]) {
 				// it's the one
-				$revRate = $outData[$jur]["bracket"][$i]["rate"];
-				$From = $outData[$jur]["bracket"][$i]["from"];
-				$prevTaxPaid = $outData[$jur]["bracket"][$i-1]["maxTotalTaxPaid"];
-				if (isset($outData[$jur]["bracket"][$i]["premium"])) $prem = $outData[$jur]["bracket"][$i]["premium"];
+				$revRate = $jur["bracket"][$i]["rate"];
+				$From = $jur["bracket"][$i]["from"];
+				$prevTaxPaid = $jur["bracket"][$i-1]["maxTotalTaxPaid"];
+				if (isset($jur["bracket"][$i]["premium"])) $prem = $jur["bracket"][$i]["premium"];
 				break;
 			}
 		}
 	}
 
 	if ($prem) {
-		$outData[$jur]["reverse"]["premium"] = $prem;
+		$jur["reverse"]["premium"] = $prem;
 	} else {
 		$prem = 0;
 	}
@@ -724,7 +739,7 @@ function discernInputs($uri, $logging=false) {
 			}
 		} elseif (preg_match("/^\\$?([\d,]+(\.\d\d?\d?\d?)?)$/", $uri[$i], $amnt)) {
 			$inputs["amt"] = str_replace(",", "", $amnt[1]);
-			if ($logging) print "Setting \$amt to $amt.<br>\n";
+			if ($logging) print "Setting \$amt to " . $inputs["amt"] . ".<br>\n";
 		} elseif (preg_match("/^amt=(\d+(\.\d\d?\d?\?)?)/i", $uri[$i], $amnt)) {
 			$inputs["amt"] = $amnt[1];
 		}
